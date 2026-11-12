@@ -151,7 +151,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v12</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v13</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -347,7 +347,7 @@ function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
 const COORD_MIN=-200,COORD_MAX=400;
 const LIMITS={x:[COORD_MIN,COORD_MAX],y:[COORD_MIN,COORD_MAX],cx:[COORD_MIN,COORD_MAX],cy:[COORD_MIN,COORD_MAX],
   radius:[0,150],r:[0,150],w:[0,200],h:[0,200],width:[0,200],length:[0,200],inner:[0,150],outer:[0,150],
-  margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
+  trackExtra:[-50,50],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
 function lim(k,v){const L=LIMITS[k];return L&&typeof v==='number'?clamp(v,L[0],L[1]):v;}
 function arenaOf(sl){const A={...DEFAULT_ARENA,...((sl&&sl.arena)||{})};
   for(const k of['cx','cy','margin','gridStep','snap','w','h'])if(typeof A[k]==='number')A[k]=lim(k,A[k]);
@@ -464,7 +464,8 @@ function resolveTargets(items){
     if(it.type==='tether'){const a=by.get(it.a),b=by.get(it.b);if(!ok(a)||!ok(b)||a.id===b.id)return{...it,_dangling:true};
       return{...it,x:r2((a.x+b.x)/2),y:r2((a.y+b.y)/2),_a:[a.x,a.y],_b:[b.x,b.y]};}
     if(it.target&&!it.attach&&ROTATABLE.has(it.type)){const t=by.get(it.target);
-      if(ok(t)&&t.id!==it.id){const dx=t.x-it.x,dy=t.y-it.y;if(Math.hypot(dx,dy)>1e-6)return{...it,rot:normRot(Math.atan2(dx,-dy)*180/Math.PI+(+it.aimOffset||0)),_aimed:true};}}
+      if(ok(t)&&t.id!==it.id){const dx=t.x-it.x,dy=t.y-it.y,d=Math.hypot(dx,dy);if(d>1e-6){const o={...it,rot:normRot(Math.atan2(dx,-dy)*180/Math.PI+(+it.aimOffset||0)),_aimed:true};
+        if(it.type==='rect'&&it.track){o.anchor='back';o.length=r2(Math.max(0,d+(+it.trackExtra||0)));o._tracked=true;}return o;}}}
     return it;
   });
 }
@@ -834,7 +835,7 @@ function arenaKey(){const sl=curSlideDoc();if(!sl)return'';const A=arenaOf(sl);r
 function buildInsp(){
   const insp=$('insp'),sl=curSlideDoc(),sp=$('slidePane'),ip=$('itemPane');
   const prevSel=buildInsp._sel,spTop=sp.scrollTop,ipTop=ip.scrollTop;buildInsp._sel=selIds.join(',');
-  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(!sl){sp.innerHTML='<p class="note">No slide selected.</p>';ip.innerHTML='';insp.classList.remove('item');return;}
   const A=arenaOf(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   {
@@ -883,7 +884,8 @@ function buildInsp(){
   } else {
     const s=its[0];
     const aimed=!!(s.target&&!s.attach&&ROTATABLE.has(s.type)&&getDoc('items',s.target));
-    const f=(FIELDS[s.type]||[]).map(x=>x.t==='ref'?refRow(x.k,x.l,s.id):(x.k==='rot'&&aimed)?'':x.t==='num'?numRow(x.k,x.l,x.step,x.min,x.max):x.t==='sel'?selRow(x.k,x.l,x.opts):x.t==='area'?areaRow(x.k,x.l):x.t==='chk'?`<div class="chks">${chk(x.k,x.l)}</div>`:txtRow(x.k,x.l)).join('');
+    const tracking=aimed&&s.type==='rect'&&!!s.track;
+    const f=(FIELDS[s.type]||[]).map(x=>x.t==='ref'?refRow(x.k,x.l,s.id):(x.k==='rot'&&aimed)||(tracking&&(x.k==='length'||x.k==='anchor'))?'':x.t==='num'?numRow(x.k,x.l,x.step,x.min,x.max):x.t==='sel'?selRow(x.k,x.l,x.opts):x.t==='area'?areaRow(x.k,x.l):x.t==='chk'?`<div class="chks">${chk(x.k,x.l)}</div>`:txtRow(x.k,x.l)).join('');
     const aoe=AOE.has(s.type),hasColor=!['marker','waymark'].includes(s.type);
     ip.innerHTML=closeBtn+`<fieldset style="border:0;padding:0;margin:0"${dis}><h2 style="padding-right:30px">${TYPE_LABEL[s.type]}</h2>${txtRow('name','Name')}
       ${!['ink','tether'].includes(s.type)?numRow('x','X',.1,r2(A.cx-span),r2(A.cx+span))+numRow('y','Y',.1,r2(A.cy-span),r2(A.cy+span))+numRow('pd','Dist. from ctr',.1,0,A.radius+A.margin)+numRow('pa','Angle from ctr °',1,0,360):''}
@@ -894,6 +896,7 @@ function buildInsp(){
       <div class="sect">${f}</div>
       ${TARGETABLE.has(s.type)?`<div class="sect"><h2>Target</h2>${refRow('target','Target',s.id)}
         ${s.target?`<div class="chks">${chk('attach','Stick to target’s position')}</div>`:''}
+        ${aimed&&s.type==='rect'?`<div class="chks">${chk('track','Tracking — length reaches the target')}</div>${tracking?numRow('trackExtra','Extend past target (y)',.5,-20,20)+'<p class="note">Starts at this rectangle’s X/Y and stretches exactly to the target, re-sizing as either moves.</p>':''}`:''}
         ${aimed?numRow('aimOffset','Aim offset °',1,-180,180)+'<p class="note">Rotation follows the target automatically — move the target and this shape re-aims.</p>':s.target&&s.attach?'<p class="note">This shape follows its target around.</p>':`<p class="note">${ROTATABLE.has(s.type)?'Pick a player and this shape will always aim at them.':'Pick a player and tick “stick” to make this shape follow them.'}</p>`}</div>`:''}
       <div class="sect">${hasColor?colRow('color','Color')+`<div class="swatches">${SWATCHES.map(c=>`<button data-sw="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>`:''}
         ${numRow('opacity','Opacity',.05,0,1)}${aoe||s.type==='tether'?txtRow('label','Label')+numRow('labelSize','Label size',.1,.3,6):''}
@@ -906,7 +909,7 @@ function buildInsp(){
 }
 function syncInsp(except,force){
   const insp=$('insp');
-  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
   insp.querySelectorAll('#layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
@@ -942,7 +945,7 @@ insp.addEventListener('input',e=>{
   if(k==='role'&&s.type==='marker'){}
   patchItem(s.id,patch);syncInsp(el);
 });
-insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.a==='shape'||e.target.dataset.ap&&e.target.dataset.ap.endsWith(':cut')||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
+insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.k==='track')setTimeout(buildInsp);if(e.target.dataset.a==='shape'||e.target.dataset.ap&&e.target.dataset.ap.endsWith(':cut')||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
 insp.addEventListener('focusout',e=>{endGesture();if(e.target&&e.target.type==='number')setTimeout(()=>syncInsp(null,true));});
 // middle-click a row in the attack/layer list = same as its show/hide dot
 insp.addEventListener('mousedown',e=>{if(e.button===1&&e.target.closest('[data-lsel]'))e.preventDefault();});
