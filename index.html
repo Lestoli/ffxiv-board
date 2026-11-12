@@ -199,8 +199,8 @@ const DEF={
   donut:{name:'Donut',inner:8,outer:20,color:ORANGE,opacity:.45},
   rect:{name:'Line AoE',width:8,length:40,rot:0,anchor:'center',color:ORANGE,opacity:.45},
   cone:{name:'Cone',radius:20,angle:90,rot:0,color:ORANGE,opacity:.45},
-  cross:{name:'Cross',width:8,length:40,rot:0,color:ORANGE,opacity:.45},
-  star:{name:'Star',width:6,length:40,rot:0,color:ORANGE,opacity:.45},
+  cross:{name:'Cross',width:8,length:20,rot:0,color:ORANGE,opacity:.45},
+  star:{name:'Star',width:6,length:20,rot:0,color:ORANGE,opacity:.45},
   tether:{name:'Tether',a:'',b:'',width:.3,color:'#ff5fd2',opacity:.95,dashed:false,showDist:true,distSize:1.1},
   arrow:{name:'Arrow',width:.6,length:8,rot:0,color:'#ffffff',opacity:.95,stroke:false},
   tower:{name:'Tower',radius:3,count:1,color:'#b46bff',opacity:.4},
@@ -221,8 +221,8 @@ const FIELDS={
   donut:[N('inner','Inner radius',.5,0,50),N('outer','Outer radius',.5,0,60)],
   rect:[N('width','Width',.5,0,80),N('length','Length',.5,0,80),ROT,S('anchor','Anchor',[['center','Centered on X/Y'],['back','Back edge at X/Y']])],
   cone:[N('radius','Radius',.5,0,60),N('angle','Cone angle °',1,1,360),ROT],
-  cross:[N('width','Arm width',.5,0,40),N('length','Total length',.5,0,80),ROT],
-  star:[N('width','Arm width',.5,0,40),N('length','Total length',.5,0,80),ROT],
+  cross:[N('width','Arm width',.5,0,40),N('length','Arm length',.5,0,60),ROT],
+  star:[N('width','Arm width',.5,0,40),N('length','Arm length',.5,0,60),ROT],
   tether:[{k:'a',l:'End 1',t:'ref'},{k:'b',l:'End 2',t:'ref'},N('width','Thickness',.05,.05,2),C('dashed','Dashed line'),C('showDist','Show distance'),N('distSize','Distance text size',.1,.4,4)],
   arrow:[N('width','Shaft width',.1,.1,5),N('length','Length',.5,0,50),ROT],
   tower:[N('radius','Radius',.5,0,20),N('count','Soak count',1,0,8)],
@@ -381,7 +381,7 @@ function smoothPath(pts){
 }
 // outline of N equal arms through the center (4 = plus, 8 = plus + intercardinals), drawn as one polygon so overlaps don't double up
 function armsPoly(n,width,length){
-  const w=Math.max(0,width)/2,step=2*Math.PI/n,half=step/2,inner=w>0?w/Math.sin(half):0,b=Math.max(length/2,inner*Math.cos(half)+.01);
+  const w=Math.max(0,width)/2,step=2*Math.PI/n,half=step/2,inner=w>0?w/Math.sin(half):0,b=Math.max(length,inner*Math.cos(half)+.01);
   const rot=(x,y,t)=>[r2(x*Math.cos(t)-y*Math.sin(t)),r2(x*Math.sin(t)+y*Math.cos(t))],pts=[];
   for(let i=0;i<n;i++){const t=i*step;pts.push(rot(-w,-b,t),rot(w,-b,t),rot(0,-inner,t+half));}
   return pts.map(q=>q.join(',')).join(' ');
