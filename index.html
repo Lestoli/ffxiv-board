@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v27</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v28</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -1163,6 +1163,19 @@ function syncInsp(except,force){
 function readVal(el){if(el.type==='checkbox')return el.checked;if(el.type==='number'||el.type==='range'){const v=parseFloat(el.value);return isNaN(v)?null:v;}return el.value;}
 function fmtT(ms){ms=Math.max(0,Math.round(ms||0));const m=Math.floor(ms/60000),sec=Math.floor(ms/1000)%60,r=ms%1000;return `${m}:${String(sec).padStart(2,'0')}:${String(r).padStart(3,'0')}`;}
 let lastLsel=null;
+// one-time upgrade: rewrite attacks recorded by the older relay with the correct main target / rank / hit list
+let _fixing=false;
+function fixOldHits(){
+  if(_fixing||!canWrite||MODE!=='shared')return;
+  const todo=[...allDocs('items').values()].filter(it=>it.auto&&it.ev&&typeof it.ev.raw==='string'&&!Array.isArray(it.ev.hitList)&&!it.ev.hitsFixed);
+  if(!todo.length)return;_fixing=true;let i=0;
+  const step=()=>{const chunk=todo.slice(i,i+40);i+=40;
+    for(const it of chunk){const cur=getDoc('items',it.id);if(!cur||!cur.ev)continue;const h=hitsOf({raw:cur.ev.raw});
+      const ev={...clone(cur.ev),hitList:h.slice(0,8),dist:h.length?String(h[0].rank):'',main:h.length?h[0].name:'',hits:h.map(x=>`${x.name} (${x.job}) #${x.rank}`).join(', ').slice(0,400),hitsFixed:true};
+      queueWrite('items',it.id,{...clone(cur),ev});}
+    if(i<todo.length)setTimeout(step,400);else{_fixing=false;toast(`Updated ${todo.length} recorded attack${todo.length===1?'':'s'} with the correct distance ranks`);}};
+  step();
+}
 function pullT0(items){const a=items.filter(i=>i.auto&&i.at).map(i=>i.at);const sl=curSlideDoc();return sl&&sl.startedAt?sl.startedAt:(a.length?Math.min(...a):0);}
 const insp=$('insp');
 insp.addEventListener('input',e=>{
@@ -1499,6 +1512,7 @@ function setReadOnly(ro){canWrite=!ro;if(ro){setTool('select');}
 function onSnap(col){return snap=>{
   const prev=server[col];
   server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};let w=_wrap.get(v);if(!w||w.id!==d.id){w={...v,id:d.id};_wrap.set(v,w);}return[d.id,w];}));dataVer++;
+  if(col==='items'&&!snap.metadata.fromCache)setTimeout(fixOldHits,1500);
   if(col==='items'){const now=Date.now();if(autoInit){for(const[id,it]of server.items)if(it.auto&&!prev.has(id)&&!autoSeen.has(id))autoSeen.set(id,now);}autoInit=true;}
   if(col==='slides'){if(slidesKnown&&followPulls&&!drag){const nw=[...server.slides.values()].filter(sl=>isPull(sl)&&!slidesKnown.has(sl.id)).sort((a,b)=>(b.pull||0)-(a.pull||0))[0];
       if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{viewFight=nw.fight||'';goSlide(nw.id);revealCard(nw.id);const f=nw.fight&&getDoc('fights',nw.fight);toast((f?f.name+' — ':'')+nw.title+' started');});}}
