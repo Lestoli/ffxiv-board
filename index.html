@@ -173,7 +173,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v20</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v21</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -406,7 +406,7 @@ function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
 const COORD_MIN=-200,COORD_MAX=400;
 const LIMITS={x:[COORD_MIN,COORD_MAX],y:[COORD_MIN,COORD_MAX],cx:[COORD_MIN,COORD_MAX],cy:[COORD_MIN,COORD_MAX],
   radius:[0,150],r:[0,150],w:[0,200],h:[0,200],width:[0,200],length:[0,200],inner:[0,150],outer:[0,150],
-  trackExtra:[-50,50],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
+  trackExtra:[-50,50],moveSpeed:[0,30],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
 function lim(k,v){const L=LIMITS[k];return L&&typeof v==='number'?clamp(v,L[0],L[1]):v;}
 function arenaOf(sl){const A={...DEFAULT_ARENA,...((sl&&sl.arena)||{})};
   for(const k of['cx','cy','margin','gridStep','snap','w','h'])if(typeof A[k]==='number')A[k]=lim(k,A[k]);
@@ -494,6 +494,7 @@ function arenaBox(A){
   const half=Math.max(x1-x0,y1-y0)/2;return{cx:r2((x0+x1)/2),cy:r2((y0+y1)/2),h:half+A.margin,in:half};
 }
 function vk(){return view.h/24;}
+const k0=()=>vk();
 
 // ================= rendering =================
 function arenaShape(A,attrs){const R=A.radius;return A.shape==='square'?`<rect x="${A.cx-R}" y="${A.cy-R}" width="${2*R}" height="${2*R}" ${attrs}/>`:`<circle cx="${A.cx}" cy="${A.cy}" r="${R}" ${attrs}/>`;}
@@ -549,16 +550,25 @@ let _svgPre='L';
 // ===== animated slides: timing, telegraphs, movement keyframes, debuff timers =====
 let playT=0,playing=false,playSpeed=1,playLoop=false,_lastTs=0,_animT=null;
 const nz=v=>v===undefined||v===null||v===''?null:+v;
+const GAME_RUN_SPEED=6; // yalms per second
+function slideSpeed(sl){const v=sl&&sl.moveSpeed;return v===undefined||v===null||v===''?GAME_RUN_SPEED:Math.max(0,+v||0);}
+function sortedKeys(keys){return(keys||[]).filter(q=>q&&isFinite(q.t)).map(q=>({t:+q.t,x:+q.x,y:+q.y})).sort((a,b)=>a.t-b.t);}
+function movePlan(keys,v){const k=sortedKeys(keys);if(!k.length)return null;const segs=[];let cx=k[0].x,cy=k[0].y,seg=null;
+  for(let i=1;i<k.length;i++){const dep=k[i].t;if(seg){const p=segPos(seg,dep);cx=p[0];cy=p[1];}const d=Math.hypot(k[i].x-cx,k[i].y-cy);seg={sx:cx,sy:cy,tx:k[i].x,ty:k[i].y,t0:dep,t1:dep+(v>0?d/v:0)};segs.push(seg);}
+  return{start:[k[0].x,k[0].y],segs};}
+function segPos(g,T){if(T<=g.t0)return[g.sx,g.sy];if(T>=g.t1)return[g.tx,g.ty];const f=(T-g.t0)/(g.t1-g.t0);return[r2(g.sx+(g.tx-g.sx)*f),r2(g.sy+(g.ty-g.sy)*f)];}
+function posAtKeys(keys,T,v){if(!(v>0))return interpKeys(keys,T);const P=movePlan(keys,v);if(!P)return null;let cur=null;for(const g of P.segs)if(T>=g.t0)cur=g;return cur?segPos(cur,T):P.start;}
 function interpKeys(keys,T){const k=[...keys].filter(q=>q&&isFinite(q.t)).sort((a,b)=>a.t-b.t);if(!k.length)return null;if(T<=k[0].t)return[k[0].x,k[0].y];
   for(let i=1;i<k.length;i++)if(T<=k[i].t){const a=k[i-1],b=k[i],f=(T-a.t)/Math.max(1e-6,b.t-a.t);return[r2(a.x+(b.x-a.x)*f),r2(a.y+(b.y-a.y)*f)];}
   const l=k[k.length-1];return[l.x,l.y];}
 function aoeTiming(it){const st=nz(it.start)||0,tele=+it.tele||0,hit=+it.hit||0;if(!(AOE.has(it.type)&&(tele>0||hit>0)))return null;
   const h=hit>0?hit:.7;return{st,hitAt:st+tele,end:st+tele+h,tele,h};}
 // ghost: when editing (not playing) show things that aren't active at T faintly so they can still be picked
-function animResolve(items,T,ghost){
-  const out=[];
+function animResolve(items,T,ghost,speed){
+  const out=[],v=speed===undefined?slideSpeed(curSlideDoc()):speed;
   for(const it0 of items){let it=it0;
-    if(Array.isArray(it.keys)&&it.keys.length){const p=interpKeys(it.keys,T);if(p)it={...it,x:p[0],y:p[1]};}
+    if(it._dragPos)it={...it,x:it._dragPos[0],y:it._dragPos[1]};
+    else if(Array.isArray(it.keys)&&it.keys.length){const p=posAtKeys(it.keys,T,v);if(p)it={...it,x:p[0],y:p[1]};}
     let hide=false;const st=nz(it.start),en=nz(it.end),tm=aoeTiming(it);
     if(tm){if(T<tm.st)hide=true;else if(T<tm.hitAt)it={...it,_tele:true,opacity:Math.max(.12,(+it.opacity||.45)*.75)};
       else if(T<tm.end){const f=1-(T-tm.hitAt)/tm.h;it={...it,_flash:true,opacity:Math.max(.05,.95*f)};}else if(!it.stay)hide=true;}
@@ -570,7 +580,7 @@ function animResolve(items,T,ghost){
 }
 function animLenOf(sl){if(sl&&+sl.animLen>0)return +sl.animLen;let m=5;
   for(const it of slideItems(sl.id)){const tm=aoeTiming(it);if(tm)m=Math.max(m,tm.end+1);const st=nz(it.start),en=nz(it.end);if(st)m=Math.max(m,st+1);if(en)m=Math.max(m,en+.5);
-    (it.keys||[]).forEach(k=>m=Math.max(m,(+k.t||0)+1));(it.debuffs||[]).forEach(d=>{if(+d.dur>0)m=Math.max(m,(+d.start||0)+(+d.dur)+1.5);});}
+    (it.keys||[]).forEach(k=>m=Math.max(m,(+k.t||0)+1));{const P=(it.keys||[]).length&&slideSpeed(sl)>0?movePlan(it.keys,slideSpeed(sl)):null;if(P)P.segs.forEach(g=>m=Math.max(m,g.t1+1));}(it.debuffs||[]).forEach(d=>{if(+d.dur>0)m=Math.max(m,(+d.start||0)+(+d.dur)+1.5);});}
   return Math.ceil(m);}
 function withKey(d,T,x,y){const keys=clone(d.keys||[]);
   if(!keys.length){if(T<.01)return{...d,x,y};keys.push({t:0,x:d.x,y:d.y});}
@@ -669,7 +679,7 @@ function buildSlideSVG(sl,items,o){
   if(A.showTitle&&sl&&sl.title&&!o.thumb)s+=`<text x="${bx0+.8}" y="${by0+.8}" font-size="${Math.min(1.2,A.margin*.32)}" font-family="${FONT}" font-weight="700" fill="#fff" dominant-baseline="hanging">${esc(sl.title)}</text>`;
   _svgPre=o.pre;
   const animOn=!!(sl&&sl.anim);_animT=animOn?(o.live?playT:(o.t||0)):null;
-  if(animOn&&!o.live)items=animResolve(items,o.t||0,false);
+  if(animOn&&!o.live)items=animResolve(items,o.t||0,false,slideSpeed(sl));
   let run='';const flush=()=>{if(run){s+=`<g mask="url(#${P}cl)">${run}</g>`;run='';}};
   for(const it of resolveTargets(items)){if(it.visible===false||(it.auto&&(o.thumb?!it.pinned:!autoShown(it))))continue;const g=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));
     if(AOE.has(it.type)&&A.clip)run+=g;else{flush();s+=g;}}
@@ -716,6 +726,12 @@ function renderStage(){
     if(t&&t.id!==it.id)ov+=`<line x1="${it.x}" y1="${it.y}" x2="${t.x}" y2="${t.y}" stroke="#ffd43b" stroke-width="${.08*k}" stroke-dasharray="${.35*k} ${.25*k}" pointer-events="none"/><circle cx="${t.x}" cy="${t.y}" r="${1.2*k}" fill="none" stroke="#ffd43b" stroke-width="${.1*k}" pointer-events="none"/>`;}
   if(tetherStart&&tetherStart.slide===curSlide){const a=items.find(i=>i.id===tetherStart.id);if(a&&tetherStart.cur){const c=tetherStart.cur,st=toolStyle.tether,d=Math.hypot(c.x-a.x,c.y-a.y);
     ov+=`<g pointer-events="none"><line x1="${a.x}" y1="${a.y}" x2="${c.x}" y2="${c.y}" stroke="${st.color}" stroke-width="${st.width}" stroke-opacity=".7" stroke-dasharray="${st.width*3} ${st.width*2}"/><circle cx="${a.x}" cy="${a.y}" r="${1.3*k}" fill="none" stroke="${st.color}" stroke-width="${.12*k}"/><text x="${c.x+.8*k}" y="${c.y-.8*k}" font-size="${.9*k}" font-family="${FONT}" font-weight="700" fill="#fff" stroke="#000" stroke-width="${.1*k}" paint-order="stroke">${d.toFixed(1)}y</text></g>`;}}
+  if(isAnimSlide())for(const id of selIds){const raw=getDoc('items',id);if(!raw||!(raw.keys||[]).length)continue;const v=slideSpeed(sl),k=sortedKeys(raw.keys);
+    const P=v>0?movePlan(raw.keys,v):null;const sec=t=>(Math.round(t*10)/10)+'s';
+    // the route actually walked (a new move starts from wherever the player is at that moment)
+    let pts=[[k[0].x,k[0].y]];if(P)P.segs.forEach((g,i)=>{const nx=P.segs[i+1];const end=nx&&nx.t0<g.t1?segPos(g,nx.t0):[g.tx,g.ty];pts.push([g.sx,g.sy],end);});else pts=k.map(q=>[q.x,q.y]);
+    ov+=`<g pointer-events="none"><polyline points="${pts.map(q=>q.join(',')).join(' ')}" fill="none" stroke="#ffd43b" stroke-width="${.1*vk()}" stroke-dasharray="${.4*vk()} ${.25*vk()}" stroke-opacity=".9"/>`;
+    k.forEach((q,i)=>{const g=P&&i>0?P.segs[i-1]:null;ov+=`<circle cx="${q.x}" cy="${q.y}" r="${.35*vk()}" fill="#ffd43b"/><text x="${q.x+.55*vk()}" y="${q.y-.55*vk()}" font-size="${.75*vk()}" font-family="${FONT}" font-weight="700" fill="#ffd43b" stroke="#000" stroke-width="${.1*vk()}" paint-order="stroke">${i===0?'start':(g?'go '+sec(q.t)+' → here '+sec(g.t1):sec(q.t))}</text>`;});ov+='</g>';}
   if(selIds.length===1&&canWrite){const it=items.find(i=>i.id===selIds[0]);
     if(it&&ROTATABLE.has(it.type)&&!it.locked&&!it._aimed&&!(it.target&&it.attach&&false)){const t=(it.rot||0)*Math.PI/180,hd=3.5*k,hx=it.x+hd*Math.sin(t),hy=it.y-hd*Math.cos(t);
       ov+=`<line x1="${it.x}" y1="${it.y}" x2="${hx}" y2="${hy}" stroke="#5fd3ff" stroke-width="${.08*k}" stroke-dasharray="${.25*k} ${.15*k}" pointer-events="none"/><circle data-handle="1" cx="${hx}" cy="${hy}" r="${.6*k}" fill="#5fd3ff" stroke="#fff" stroke-width="${.1*k}"/>`;}}
@@ -789,7 +805,7 @@ function animTick(ts){if(!playing)return;const dt=Math.min(.1,(ts-_lastTs)/1000)
   if(playT>=L){if(playLoop)playT=0;else{playT=L;playing=false;}}renderStage();updTimeline();if(playing)requestAnimationFrame(animTick);}
 function setPlaying(p){const sl=curSlideDoc();if(!sl||!sl.anim)return;if(p&&playT>=animLenOf(sl)-.01)playT=0;playing=p;if(p){setSel([]);_lastTs=performance.now();requestAnimationFrame(animTick);}updTimeline();scheduleRender();}
 $('timeline').addEventListener('click',e=>{if(e.target.id==='tlPlay')setPlaying(!playing);if(e.target.id==='tlStart'){playing=false;playT=0;updTimeline();scheduleRender();}});
-$('timeline').addEventListener('input',e=>{const t=e.target;if(t.id==='tlScrub'){playing=false;playT=+t.value;$('tlTime').textContent=fmtT(playT*1000);renderStage();syncInsp();}
+$('timeline').addEventListener('input',e=>{const t=e.target;if(t.id==='tlScrub'){playing=false;playT=+t.value;$('tlTime').textContent=fmtT(playT*1000);renderStage();syncInsp();const mb=document.querySelector('[data-act="mvAdd"]');if(mb)mb.textContent='+ Move at '+fmtT(playT*1000);}
   if(t.id==='tlSpeed')playSpeed=+t.value;if(t.id==='tlLoop')playLoop=t.checked;});
 $('timeline').addEventListener('change',e=>{if(e.target.id==='tlLen'){const sl=curSlideDoc();const v=parseFloat(e.target.value);if(sl)edit('slides',sl.id,{...clone(sl),animLen:v>0?lim('animLen',v):0});updTimeline();}});
 
@@ -1027,6 +1043,7 @@ function buildInsp(){
     const items=slideItems(curSlide);
     sp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>Slide</h2>${txtRow('title','Slide title','data-st')}
       <div class="chks">${chk('showTitle','Show title on arena','data-a')}${chk('anim','Animated slide (timeline)','data-st')}</div>
+      ${sl.anim?numRow('animLen','Length (s)',1,1,180,'data-st')+numRow('moveSpeed','Move speed (y/s)',.5,0,12,'data-st')+'<p class="note">Length 0 = automatic. Move speed 6 = in-game run speed; 0 = players arrive exactly at each waypoint’s time.</p>':''}
       ${sl.anim?'<p class="note">Use the timeline under the arena. Dragging a shape while the playhead isn’t at 0 records where it moves to at that moment; set when AoEs appear and go off in each shape’s Timing.</p>':''}
       <div class="btnrow"><button data-act="waymarks">+ 8 waymarks</button><button data-act="party">+ Party clock spots</button></div>
       <div class="sect"><h2>Team jobs</h2>
@@ -1093,8 +1110,12 @@ function buildInsp(){
         <p class="note">Shown above the player (max 6 letters). The number is the timer in seconds${sl.anim?' — it counts down during playback, from the “at” time':''}.</p></div>`:''}
       ${sl.anim?`<div class="sect"><h2>Timing</h2>
         ${numRow('start','Appears at (s)',.1,0,animLenOf(sl))}${AOE.has(s.type)?numRow('tele','Telegraph (s)',.1,0,15)+numRow('hit','Hit effect (s)',.1,0,5)+`<div class="chks">${chk('stay','Stay after it goes off')}</div><p class="note">Telegraph = dashed warning shown before it goes off; it then flashes for the hit effect time. Leave both 0 to just show it from “Appears at”.</p>`:numRow('end','Disappears at (s)',.1,0,animLenOf(sl))+'<p class="note">0 = never disappears.</p>'}
-        ${s.type!=='tether'&&s.type!=='ink'?`<h2 style="margin-top:10px">Movement</h2>${(s.keys||[]).length?`<div class="kfrow" style="color:var(--dim);font-size:11px"><span>time s</span><span>X</span><span>Y</span><span></span></div>`+[...s.keys].map((k,i)=>`<div class="kfrow"><input type="number" step=".1" data-kf="${i}:t"><input type="number" step=".5" data-kf="${i}:x"><input type="number" step=".5" data-kf="${i}:y"><button class="ib" data-kfdel="${i}" title="Remove">✕</button></div>`).join(''):'<p class="note">Stays put. Move the playhead, then drag this on the arena to make it move there at that time.</p>'}
-          <div class="btnrow"><button data-act="kfAdd">+ Keyframe at playhead</button>${(s.keys||[]).length?'<button data-act="kfClear">Stop moving</button>':''}</div>`:''}</div>`:''}
+        ${s.type!=='tether'&&s.type!=='ink'?(()=>{const ks=sortedKeys(s.keys),v=slideSpeed(sl),P=ks.length&&v>0?movePlan(s.keys,v):null;
+          const rows=ks.length?ks.map((k,i)=>i===0?`<div class="kfrow"><span style="font-size:12px;color:var(--dim)">Start</span><input type="number" step=".5" data-kf="${i}:x" title="X"><input type="number" step=".5" data-kf="${i}:y" title="Y"><span></span></div>`
+            :`<div class="kfrow"><input type="number" step=".1" min="0" data-kf="${i}:t" title="Start moving at (seconds)"><input type="number" step=".5" data-kf="${i}:x" title="X"><input type="number" step=".5" data-kf="${i}:y" title="Y"><button class="ib" data-kfdel="${i}" title="Remove">✕</button></div>${P?`<div class="note" style="margin:-1px 0 4px 2px">arrives ${fmtT(P.segs[i-1].t1*1000)}</div>`:''}`).join(''):'';
+          return `<h2 style="margin-top:10px">Movement</h2>${ks.length?`<div class="kfrow" style="color:var(--dim);font-size:11px"><span>at (s)</span><span>to X</span><span>to Y</span><span></span></div>${rows}`:'<p class="note">Stays where it is for the whole animation.</p>'}
+          <div class="btnrow"><button class="pri" data-act="mvAdd">+ Move at ${fmtT(playT*1000)}</button>${ks.length?'<button data-act="kfClear">Stop moving</button>':''}</div>
+          <p class="note">${v>0?`Players start moving at each time and travel at ${v} y/s${v===GAME_RUN_SPEED?' (in-game run speed)':''}, so arrival depends on distance.`:'Each point is reached exactly at its time.'} Click “+ Move”, then click the arena where they go. You can also drag the player while the playhead is past 0. The path shows on the arena while this is selected.</p>`;})():''}</div>`:''}
       ${TARGETABLE.has(s.type)?`<div class="sect"><h2>Target</h2>${refRow('target','Target',s.id)}
         ${s.target?`<div class="chks">${chk('attach','Stick to target’s position')}</div>`:''}
         ${aimed&&s.type==='rect'?`<div class="chks">${chk('track','Tracking — length reaches the target')}</div>${tracking?numRow('trackExtra','Extend past target (y)',.5,-20,20)+'<p class="note">Starts at this rectangle’s X/Y and stretches exactly to the target, re-sizing as either moves.</p>':''}`:''}
@@ -1116,11 +1137,11 @@ function syncInsp(except,force){
   insp.querySelectorAll('#layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
   insp.querySelectorAll('[data-roster]').forEach(el=>{if(el!==act||force){const v=rosterMap()[el.dataset.roster]||'';if(el.value!==v)el.value=v;}});
   insp.querySelectorAll('[data-showjobs]').forEach(el=>{el.checked=showJobs();});
-  if(s){const ks=[...(s.keys||[])];insp.querySelectorAll('[data-kf]').forEach(el=>{if(el===act&&!force)return;const[i,f]=el.dataset.kf.split(':');const k=ks[+i];if(k){const nv=String(+(+k[f]).toFixed(2));if(el.value!==nv)el.value=nv;}});
+  if(s){const ks=sortedKeys(s.keys);insp.querySelectorAll('[data-kf]').forEach(el=>{if(el===act&&!force)return;const[i,f]=el.dataset.kf.split(':');const k=ks[+i];if(k){const nv=String(+(+k[f]).toFixed(2));if(el.value!==nv)el.value=nv;}});
     const ds=s.debuffs||[];insp.querySelectorAll('[data-db]').forEach(el=>{if(el===act&&!force)return;const[i,f]=el.dataset.db.split(':');const d=ds[+i];if(!d)return;const v=d[f];const nv=f==='color'?(v||'#b46bff'):(v===undefined||v===null?'':String(v));if(el.value!==nv)el.value=nv;});}
   insp.querySelectorAll('[data-k],[data-a],[data-st],[data-ap]').forEach(el=>{
     if(el===except||(el===act&&!force))return;let v;
-    if(el.dataset.st)v=sl&&sl[el.dataset.st];
+    if(el.dataset.st)v=sl&&(el.dataset.st==='moveSpeed'?slideSpeed(sl):el.dataset.st==='animLen'?(+sl.animLen||0):sl[el.dataset.st]);
     else if(el.dataset.a)v=A[el.dataset.a]??(el.dataset.a==='w'?40:el.dataset.a==='h'?30:undefined);
     else if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const pt=(A.parts||[])[+i];v=pt?pt[k]:undefined;}
     else{if(!s)return;const k=el.dataset.k;if(k==='pd'||k==='pa'){const p=polar(s);v=k==='pd'?p.d:p.a;}else v=s[k];if(k==='stroke'&&v===undefined)v=true;if(k==='visible'&&v===undefined)v=true;}
@@ -1144,7 +1165,7 @@ insp.addEventListener('input',e=>{
   if(el.dataset.a){edit('slides',sl.id,{...clone(sl),arena:{...arenaOf(sl),[el.dataset.a]:v}});syncInsp(el);return;}
   if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const ar=arenaOf(sl),parts=clone(ar.parts||[]);if(!parts[+i])return;parts[+i][k]=v;edit('slides',sl.id,{...clone(sl),arena:{...ar,parts}});syncInsp(el);return;}
   if(el.dataset.kf||el.dataset.db){const s=selItems()[0];if(!s)return;
-    if(el.dataset.kf){const[i,f]=el.dataset.kf.split(':');const keys=clone(s.keys||[]);if(!keys[+i])return;keys[+i][f]=f==='t'?lim('t',+v):lim(f,+v);patchItem(s.id,{keys});return;}
+    if(el.dataset.kf){const[i,f]=el.dataset.kf.split(':');const keys=sortedKeys(s.keys);if(!keys[+i])return;keys[+i][f]=f==='t'?lim('t',+v):lim(f,+v);const p={keys};if(+i===0&&f!=='t')Object.assign(p,{x:keys[0].x,y:keys[0].y});patchItem(s.id,p);return;}
     const[i,f]=el.dataset.db.split(':');const dbs=clone(s.debuffs||[]);if(!dbs[+i])return;dbs[+i][f]=f==='text'?String(v).slice(0,6):f==='color'?v:lim('dur',+v||0);patchItem(s.id,{debuffs:dbs});return;}
   const k=el.dataset.k,s=selItems()[0];if(!k||!s)return;
   let patch={[k]:v};
@@ -1173,7 +1194,7 @@ insp.addEventListener('click',e=>{
   const dbd=e.target.closest('[data-dbdel]');if(dbd&&one){const dbs=clone(one.debuffs||[]);dbs.splice(+dbd.dataset.dbdel,1);patchItem(one.id,{debuffs:dbs});setTimeout(buildInsp);return;}
   const dbo=e.target.closest('[data-dbaoe]');if(dbo&&one){const d=(one.debuffs||[])[+dbo.dataset.dbaoe];if(d){const at=r2((+d.start||0)+(+d.dur||0));
     const a=make('circle',{x:one.x,y:one.y,radius:5,color:d.color||'#b46bff',name:(d.text||'Debuff')+' AoE',target:one.id,attach:true,start:at,tele:0,hit:.8});edit('items',a.id,a);toast(`AoE added — goes off at ${fmtT(at*1000)}`);}return;}
-  const kfd=e.target.closest('[data-kfdel]');if(kfd&&one){const keys=clone(one.keys||[]);keys.splice(+kfd.dataset.kfdel,1);patchItem(one.id,keys.length?{keys,...(keys[0]?{x:keys[0].x,y:keys[0].y}:{})}:{keys:null});setTimeout(buildInsp);return;}
+  const kfd=e.target.closest('[data-kfdel]');if(kfd&&one){const keys=sortedKeys(one.keys);keys.splice(+kfd.dataset.kfdel,1);patchItem(one.id,keys.length?{keys,...(keys[0]?{x:keys[0].x,y:keys[0].y}:{})}:{keys:null});setTimeout(buildInsp);return;}
   const dp=e.target.closest('[data-delpart]');if(dp){const sl=curSlideDoc();if(!sl)return;const ar=arenaOf(sl),parts=clone(ar.parts||[]);parts.splice(+dp.dataset.delpart,1);edit('slides',sl.id,{...clone(sl),arena:{...ar,parts}});setTimeout(buildInsp);return;}
   const b=e.target.closest('[data-act]');if(b)action(b.dataset.act);
 });
@@ -1194,6 +1215,7 @@ function action(a){
       [['tank','MT',0],['tank','OT',90],['healer','H1',270],['healer','H2',180],['dps','M1',225],['dps','M2',135],['dps','R1',315],['dps','R2',45]].forEach(([role,t,an])=>{const it=make('marker',{role,text:t,name:t,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
     case'deselect':setSel([]);return;
     case'jobIcons':jobIconsBox();return;
+    case'mvAdd':{const s1=selItems()[0];if(!s1)return;picking={id:s1.id,field:'move',t:r2(playT)};renderTools();toast(`Click the arena where it should go at ${fmtT(playT*1000)} (Esc to cancel)`);return;}
     case'kfAdd':{const s1=selItems()[0];if(!s1)return;const d=displayItems().find(i=>i.id===s1.id)||s1;edit('items',s1.id,withKey(clone(s1),playT,d.x,d.y));setTimeout(buildInsp);return;}
     case'kfClear':{const s1=selItems()[0];if(!s1)return;const d=displayItems().find(i=>i.id===s1.id)||s1;patchItem(s1.id,{keys:null,x:d.x,y:d.y});setTimeout(buildInsp);return;}
     case'flipOrder':newestFirst=!newestFirst;lsSet('ffxiv-pull-order',newestFirst?'new':'old');buildInsp();return;
@@ -1231,6 +1253,9 @@ svg.addEventListener('pointerdown',e=>{
   if(e.button!==0)return;
   if(!canWrite){const it=itemAt(e);setSel(it?[it.id]:[]);if(!it){drag={mode:'pan',sx:e.clientX,sy:e.clientY,vx:view.x,vy:view.y};svg.setPointerCapture(e.pointerId);}return;}
   svg.setPointerCapture(e.pointerId);
+  if(picking&&picking.field==='move'){const pk=picking;picking=null;renderTools();const d=getDoc('items',pk.id);if(d){const x=snap(pt.x),y=snap(pt.y);
+      const disp=displayItems().find(i=>i.id===d.id)||d;const base=(d.keys||[]).length?clone(d):{...clone(d),keys:[{t:0,x:disp.x,y:disp.y}]};
+      edit('items',d.id,withKey(base,Math.max(.01,pk.t),x,y));setSel([d.id]);toast(`Moves at ${fmtT(pk.t*1000)} to (${x}, ${y})`);}return;}
   if(picking){const it=itemAt(e);const pk=picking;picking=null;renderTools();
     if(it&&it.id!==pk.id&&it.type!=='tether'&&it.type!=='ink'){patchItem(pk.id,{[pk.field]:it.id});toast('Target set: '+(it.name||TYPE_LABEL[it.type]));setSel([pk.id]);}else toast('Pick cancelled');return;}
   if(tool==='tether'){const it=itemAt(e);
@@ -1281,7 +1306,7 @@ svg.addEventListener('pointermove',e=>{
     let dx=pt.x-drag.px,dy=pt.y-drag.py;
     const nx=snap(drag.ax+dx),ny=snap(drag.ay+dy);dx=nx-drag.ax;dy=ny-drag.ay;
     const m={};for(const[id,[x,y]]of Object.entries(drag.start)){const base=gest&&gest.before.get('items|'+id)||getDoc('items',id);if(!base)continue;const nx=r2(x+dx),ny=r2(y+dy);
-      const v=drag.anim&&(((base.keys||[]).length)||playT>.01)?withKey(clone(base),playT,nx,ny):{...clone(base),x:nx,y:ny};local.items.set(id,v);m[id]=[nx,ny];}
+      const v=drag.anim&&(((base.keys||[]).length)||playT>.01)?{...withKey(clone(base),playT,nx,ny),_dragPos:[nx,ny]}:{...clone(base),x:nx,y:ny};local.items.set(id,v);m[id]=[nx,ny];}
     drag.moved=true;drag.m=m;sendPresence({drag:{s:curSlide,m}});scheduleRender();return;
   }
   if(drag.mode==='rot'){const it=getDoc('items',drag.id);if(!it)return;let a=Math.atan2(pt.x-it.x,-(pt.y-it.y))*180/Math.PI;a=e.shiftKey?Math.round(a/15)*15:Math.round(a);
@@ -1300,7 +1325,7 @@ function endDrag(e){
       setSel(d.add?[...new Set([...selIds,...hit])]:hit);}preview=null;}
   if(d.mode==='erase')endGesture();
   if(d.mode==='move'||d.mode==='rot'){
-    if(d.moved){for(const id of(d.mode==='move'?Object.keys(d.start):[d.id])){const v=local.items.get(id);if(v)queueWrite('items',id,v);}}
+    if(d.moved){for(const id of(d.mode==='move'?Object.keys(d.start):[d.id])){const v=local.items.get(id);if(v){const w={...v};delete w._dragPos;queueWrite('items',id,w);}}}
     endGesture();setTimeout(()=>sendPresence({drag:null}),300);
   }
   scheduleRender();
