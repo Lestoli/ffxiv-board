@@ -139,7 +139,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v4</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v5</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -319,7 +319,7 @@ let autoWasActive=false;
 setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;for(const t of autoSeen.values()){const d=now-t;if(d<lim){act=true;break;}}
   if(act||autoWasActive){scheduleRender();}autoWasActive=act;},200);
 function replayPull(){const its=slideItems(curSlide).filter(i=>i.auto);if(!its.length)return;const t0=Math.min(...its.map(i=>i.at||0)),now=Date.now()+300;
-  its.forEach(i=>autoSeen.set(i.id,now+((i.at||t0)-t0)));const dur=(Math.max(...its.map(i=>i.at||0))-t0)/1000;toast(`Replaying pull (${dur.toFixed(0)}s)`);scheduleRender();}
+  its.forEach(i=>autoSeen.set(i.id,now+((i.at||t0)-t0)));const dur=(Math.max(...its.map(i=>i.at||0))-t0)/1000;toast(`Replaying pull (${fmtT(dur*1000)})`);scheduleRender();}
 function stopReplay(){slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete(i.id);});scheduleRender();}
 const TIER=t=>t==='waymark'?1:t==='tether'?1.5:(t==='ink'||t==='arrow'||t==='marker'||t==='text')?2:0;
 function slideItems(sid){return[...allDocs('items').values()].filter(i=>i.slide===sid).sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));}
@@ -768,7 +768,7 @@ function buildInsp(){
       <div class="sect"><h2>${isPull(sl)?'Attacks &amp; layers':'Layers'} <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(top = ${isPull(sl)?'latest':'in front'})</span></h2><ul id="layers">${
         items.length?[...items].reverse().map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
           const t0=pullT0(items),on=s.auto?!!s.pinned:s.visible!==false;
-          return `<li data-lsel="${s.id}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span><span class="ty">${s.auto?'+'+(((s.at||t0)-t0)/1000).toFixed(1)+'s':s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'}">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
+          return `<li data-lsel="${s.id}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span><span class="ty">${s.auto?fmtT((s.at||t0)-t0):s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'}">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
         :'<li class="note" style="cursor:default">Nothing on this slide yet — pick a tool on the left.</li>'}</ul></div>`;
     if(isPull(sl)){const pb=insp.querySelector('[data-pb]'),ly=insp.querySelector('#layers');if(pb&&ly){const lys=ly.closest('.sect');insp.prepend(lys);insp.prepend(pb);lys.style.marginTop='12px';}}
   } else if(its.length>1){
@@ -787,7 +787,7 @@ function buildInsp(){
       ${!['ink','tether'].includes(s.type)?numRow('x','X',.1,r2(A.cx-span),r2(A.cx+span))+numRow('y','Y',.1,r2(A.cy-span),r2(A.cy+span))+numRow('pd','Dist. from ctr',.1,0,A.radius+A.margin)+numRow('pa','Angle from ctr °',1,0,360):''}
       ${!['ink','tether'].includes(s.type)?`<div class="btnrow" style="margin-top:2px"><button data-act="center">Move to center</button>${ROTATABLE.has(s.type)&&!aimed?'<button data-act="faceIn">Face center</button><button data-act="faceOut">Face outward</button>':''}</div>`:''}
       ${s.auto&&s.ev?(()=>{const e=s.ev,t0=pullT0(slideItems(curSlide));const row=(k,v)=>v!==undefined&&v!==''&&v!==null?`<b>${k}</b><span>${esc(v)}</span>`:'';
-        return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time','+'+(((s.at||t0)-t0)/1000).toFixed(1)+'s')}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${row('Distance rank',e.dist)}${row('Hit',e.hits)}</div>
+        return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time',fmtT((s.at||t0)-t0))}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${row('Distance rank',e.dist)}${row('Hit',e.hits)}</div>
           <div class="chks">${chk('pinned','Keep showing (pinned)')}</div></div>`;})():''}
       <div class="sect">${f}</div>
       ${TARGETABLE.has(s.type)?`<div class="sect"><h2>Target</h2>${refRow('target','Target',s.id)}
@@ -815,6 +815,7 @@ function syncInsp(except,force){
   });
 }
 function readVal(el){if(el.type==='checkbox')return el.checked;if(el.type==='number'||el.type==='range'){const v=parseFloat(el.value);return isNaN(v)?null:v;}return el.value;}
+function fmtT(ms){ms=Math.max(0,Math.round(ms||0));const m=Math.floor(ms/60000),sec=Math.floor(ms/1000)%60,r=ms%1000;return `${m}:${String(sec).padStart(2,'0')}:${String(r).padStart(3,'0')}`;}
 function pullT0(items){const a=items.filter(i=>i.auto&&i.at).map(i=>i.at);const sl=curSlideDoc();return sl&&sl.startedAt?sl.startedAt:(a.length?Math.min(...a):0);}
 const insp=$('insp');
 insp.addEventListener('input',e=>{
