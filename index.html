@@ -62,7 +62,7 @@ main{display:grid;grid-template-columns:52px 176px 1fr auto;height:calc(100vh - 
 .sl .more{padding:0 6px;font-size:14px;line-height:18px;background:transparent;border-color:transparent}
 .sl .dots{position:absolute;top:9px;right:9px;display:flex;gap:2px}
 .sl .dots i{width:9px;height:9px;border-radius:50%;border:1.5px solid #0b1430}
-.slActs{padding:8px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.slActs{display:flex;flex-direction:column;gap:6px;margin-top:2px}
 .menu{position:fixed;z-index:40;background:var(--panel);border:1px solid #2d5bb0;border-radius:9px;padding:4px;min-width:170px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 .menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:7px 10px;border-radius:6px}
 .menu button:hover{background:#16295a}
@@ -151,7 +151,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v13</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v14</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -165,10 +165,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
   <div id="slidesPane">
     <h2>Slides</h2>
     <div id="slideList"></div>
-    <div class="slActs">
-      <button id="addSlide" class="pri">+ New slide</button>
-      <button id="pasteSlide" disabled>Paste copied slide</button>
-    </div>
+
   </div>
   <div class="stagewrap" id="wrap">
     <svg id="stage" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -620,6 +617,7 @@ function renderSlides(){
       <div class="dots">${(where[sl.id]||[]).slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('')}</div>
       <div class="cap"><span class="num">${num}</span><span class="tt">${esc(sl.title||'Untitled')}${live?'<span class="live">LIVE</span>':''}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;};
   list.innerHTML=man.map((sl,i)=>card(sl,i+1)).join('')+
+    (canWrite?`<div class="slActs"><button class="pri" data-addslide>+ New slide</button>${readClip('slide')?'<button data-pasteslide>Paste copied slide</button>':''}</div>`:'')+
     (()=>{const fs=fightsSorted(),sf=shownFight(),act=activeFight(),fp=pullsOf(sf),hasUnsorted=pl.some(x=>!x.fight);
       const opts=fs.map(f=>`<option value="${f.id}"${f.id===sf?' selected':''}>${esc(f.name||'Fight')} (${pullsOf(f.id).length})</option>`).join('')+(hasUnsorted||!fs.length?`<option value=""${sf===''?' selected':''}>${fs.length?'Unsorted pulls':'All pulls'} (${pullsOf('').length})</option>`:'');
       const rec=act&&act.id===sf;
@@ -630,7 +628,6 @@ function renderSlides(){
        <label>Show attacks for <input type="number" id="pSecs" min="0.5" max="60" step="0.5" value="${showSecs}"> s</label>
        ${canWrite&&fp.length?`<button data-clearpulls style="padding:3px 8px">Clear ${fp.length} pull${fp.length===1?'':'s'}</button>`:''}</div>`+
       (fp.length?fp.map(sl=>card(sl,'#'+(sl.pull||'?'))).join(''):'<div class="note">New pulls appear here automatically while the relay is running.</div>');})();
-  $('pasteSlide').disabled=!canWrite||!readClip('slide');
 }
 function renderAll(){renderStage();renderSlides();buildInsp();renderTools();renderAvatars();}
 
@@ -711,8 +708,8 @@ function moveSlide(sid,dir){
 function copySlide(sid){writeClip('slide',{slide:clone(getDoc('slides',sid)),items:clone(slideItems(sid))});toast('Slide copied — use “Paste copied slide” (works across tabs too)');renderSlides();}
 function writeClip(kind,data){const v={kind,data};clipMem=v;try{localStorage.setItem(CLIPKEY,JSON.stringify(v));}catch(e){}}
 let clipMem=null;function readClip(kind){let v=clipMem;try{const j=JSON.parse(localStorage.getItem(CLIPKEY));if(j)v=j;}catch(e){}return v&&v.kind===kind?v.data:null;}
-$('addSlide').onclick=newSlide;$('emptyAdd').onclick=newSlide;
-$('pasteSlide').onclick=()=>{const d=readClip('slide');if(d)dupSlide(null,d);};
+$('emptyAdd').onclick=newSlide;
+$('slideList').addEventListener('click',e=>{if(e.target.closest('[data-addslide]')){newSlide();return;}if(e.target.closest('[data-pasteslide]')){const d=readClip('slide');if(d)dupSlide(null,d);}});
 $('slideList').addEventListener('click',e=>{
   const m=e.target.closest('[data-more]');
   if(m){e.stopPropagation();slideMenu(m.dataset.more,m.getBoundingClientRect());return;}
