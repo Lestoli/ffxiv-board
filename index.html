@@ -139,7 +139,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v7</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v8</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -765,7 +765,8 @@ function renderToolOpts(){
   el.classList.add('on');
 }
 $('toolopts').addEventListener('click',e=>{const b=e.target.closest('[data-tc]');if(b){toolStyle[tool].color=b.dataset.tc;renderToolOpts();}});
-$('toolopts').addEventListener('input',e=>{const k=e.target.dataset.to;if(!k)return;toolStyle[tool][k]=k==='color'?e.target.value:parseFloat(e.target.value);if(k==='color')renderToolOpts();});
+$('toolopts').addEventListener('input',e=>{const k=e.target.dataset.to;if(!k)return;toolStyle[tool][k]=k==='color'?e.target.value:parseFloat(e.target.value);
+  if(k==='color')$('toolopts').querySelectorAll('[data-tc]').forEach(b=>b.classList.toggle('on',b.dataset.tc===e.target.value));});
 
 // ================= item helpers =================
 function make(type,extra={}){const A=arenaOf(curSlideDoc());return{id:uid(),slide:curSlide,type,x:A.cx,y:A.cy,z:newZ(),stroke:true,visible:true,locked:false,label:'',labelSize:1.5,...clone(DEF[type]),...extra};}
@@ -954,6 +955,13 @@ function action(a){
 // ================= canvas interaction =================
 const svg=$('stage');
 function toWorld(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const m=svg.getScreenCTM();return m?p.matrixTransform(m.inverse()):{x:0,y:0};}
+// topmost item under the pointer, but a selected item wins if it is anywhere under the pointer
+function itemAtPreferSel(e){
+  let first=null;
+  for(const el of document.elementsFromPoint(e.clientX,e.clientY)){const g=el.closest&&el.closest('#stage [data-id]');if(!g)continue;
+    const it=getDoc('items',g.dataset.id);if(!it)continue;if(selIds.includes(it.id))return it;if(!first)first=it;}
+  return first;
+}
 function itemAt(e){const g=e.target.closest&&e.target.closest('[data-id]');return g?getDoc('items',g.dataset.id):null;}
 svg.addEventListener('pointerdown',e=>{
   if(!curSlide)return;closeMenu();
@@ -978,7 +986,7 @@ svg.addEventListener('pointerdown',e=>{
   if(DEF[tool]){const extra={x:snap(pt.x),y:snap(pt.y)};const it=make(tool,extra);if(tool==='marker'){}addItem(it);setTool('select');drag=null;return;}
   // select tool
   if(e.target.closest('[data-handle]')&&selIds.length===1){const it=getDoc('items',selIds[0]);beginGesture();touch('items',it.id);drag={mode:'rot',id:it.id,moved:false};return;}
-  const it=itemAt(e);
+  const it=e.shiftKey?itemAt(e):itemAtPreferSel(e);
   if(it){
     if(e.shiftKey){setSel(selIds.includes(it.id)?selIds.filter(x=>x!==it.id):[...selIds,it.id]);drag=null;return;}
     if(!selIds.includes(it.id))setSel([it.id]);
