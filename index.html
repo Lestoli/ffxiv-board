@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v28</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v29</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -398,11 +398,12 @@ const distOf=it=>{const d=it&&it.ev?rankOf(it.ev).trim():'';return d==='1'?'near
 const distBadge=(it,long)=>{const k=distOf(it);return k==='near'?`<span class="dbadge near" title="Hit the closest player (#1) — likely a distance bait">${long?'#1 CLOSEST':'#1 near'}</span>`:k==='far'?`<span class="dbadge far" title="Hit the farthest player (#8) — likely a distance bait">${long?'#8 FARTHEST':'#8 far'}</span>`:'';};
 function autoShown(it){if(!it.auto||it.pinned)return true;const t=autoSeen.get(it.id);if(t==null)return false;const d=Date.now()-t;return d>=0&&d<showSecs*1000;}
 let autoWasActive=false;
-setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;for(const t of autoSeen.values()){const d=now-t;if(d<lim){act=true;break;}}
+setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;if(_replay){if(now>_replay.end)_replay=null;else{pullViewT=Math.max(0,_replay.off+(now-_replay.start)/1000);act=true;}}for(const t of autoSeen.values()){const d=now-t;if(d<lim){act=true;break;}}
   if(act||autoWasActive){scheduleRender();}autoWasActive=act;},200);
 function replayPull(){const its=slideItems(curSlide).filter(i=>i.auto);if(!its.length)return;const t0=Math.min(...its.map(i=>i.at||0)),now=Date.now()+300;
+  _replay={start:now,off:(t0-pullT0(its))/1000,end:now+(Math.max(...its.map(i=>i.at||0))-t0)+showSecs*1000};
   its.forEach(i=>autoSeen.set(i.id,now+((i.at||t0)-t0)));const dur=(Math.max(...its.map(i=>i.at||0))-t0)/1000;toast(`Replaying pull (${fmtT(dur*1000)})`);scheduleRender();}
-function stopReplay(){slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete(i.id);});scheduleRender();}
+function stopReplay(){_replay=null;slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete(i.id);});scheduleRender();}
 const TIER=t=>t==='waymark'?1:t==='tether'?1.5:(t==='ink'||t==='arrow'||t==='marker'||t==='text')?2:0;
 let _bySlide={ver:-1,map:new Map()};
 function slideItems(sid){if(_bySlide.ver!==dataVer){const m=new Map();for(const it of allDocs('items').values()){let a=m.get(it.slide);if(!a){a=[];m.set(it.slide,a);}a.push(it);}for(const a of m.values())a.sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));_bySlide={ver:dataVer,map:m};}return(_bySlide.map.get(sid)||[]).slice();}
@@ -481,6 +482,20 @@ let picking=null, tetherStart=null;
 let peers=[], names={}, following=null;
 let drag=null, preview=null;
 
+// ===== arena changes during a fight: slide.arenaPhases = [{from: seconds, arena:{...}}] =====
+let editPhase=-1;            // which arena the panel edits (-1 = starting arena), local only
+let pullViewT=0,_replay=null; // time shown on a pull slide (last attack clicked / arrived, or replay progress)
+function phasesOf(sl){return(Array.isArray(sl&&sl.arenaPhases)?sl.arenaPhases:[]).filter(p=>p&&typeof p==='object'&&p.arena).map((p,i)=>({...p,from:+p.from||0,_i:i}));}
+function arenaAt(sl,T){const ps=phasesOf(sl).sort((a,b)=>a.from-b.from);let A=null;for(const p of ps)if(T>=p.from)A=p.arena;return A?arenaOf({arena:A}):arenaOf(sl);}
+function phaseIndexAt(sl,T){const ps=phasesOf(sl).sort((a,b)=>a.from-b.from);let k=-1;for(const p of ps)if(T>=p.from)k=p._i;return k;}
+function viewT(){const sl=curSlideDoc();if(!sl)return 0;if(sl.anim)return playT;if(isPull(sl))return pullViewT;const ph=phasesOf(sl);return editPhase>=0&&ph[editPhase]?ph[editPhase].from:0;}
+// keep the edited arena in step with the time being viewed
+function followPhase(){const sl=curSlideDoc();if(!sl||!phasesOf(sl).length)return;const k=phaseIndexAt(sl,viewT());if(k!==editPhase){editPhase=k;buildInsp();}}
+function editArena(sl){const ph=(Array.isArray(sl&&sl.arenaPhases)?sl.arenaPhases:[]);return editPhase>=0&&ph[editPhase]?arenaOf({arena:ph[editPhase].arena}):arenaOf(sl);}
+function setEditArena(sl,A){if(editPhase>=0&&Array.isArray(sl.arenaPhases)&&sl.arenaPhases[editPhase]){const ph=clone(sl.arenaPhases);ph[editPhase].arena=clone(A);edit('slides',sl.id,{...clone(sl),arenaPhases:ph});}
+  else edit('slides',sl.id,{...clone(sl),arena:clone(A)});}
+function parseTime(v){v=String(v||'').trim();if(!v)return 0;if(v.includes(':')){const p=v.split(':').map(Number);return p.length===3?p[0]*60+p[1]+p[2]/1000:p[0]*60+p[1];}return +v||0;}
+const fmtMS=sec=>{sec=Math.max(0,+sec||0);const m=Math.floor(sec/60),s2=sec-m*60;return `${m}:${s2<10?'0':''}${(Math.round(s2*10)/10).toFixed(s2%1?1:0)}`;};
 function fitView(){const b=arenaBox(arenaOf(curSlideDoc()));view={x:b.cx,y:b.cy,h:b.h};}
 function arenaParts(A){
   const out=[],R=+A.radius||20;
@@ -660,7 +675,7 @@ function itemSVG(s,A,live,isSel){
   return g;
 }
 function buildSlideSVG(sl,items,o){
-  const A=arenaOf(sl);A._pre=o.pre;const P=o.pre,cx=A.cx,cy=A.cy,B=arenaBox(A),R=Math.max(B.in,1);
+  const A=arenaAt(sl,o.live?viewT():(o.t||0));A._pre=o.pre;const P=o.pre,cx=A.cx,cy=A.cy,B=arenaBox(A),R=Math.max(B.in,1);
   const parts=arenaParts(A),adds=parts.filter(p=>!p.cut),cuts=parts.filter(p=>p.cut);
   const bx0=B.cx-B.h,by0=B.cy-B.h,bw=2*B.h;
   let s=`<defs><radialGradient id="${P}fg" gradientUnits="userSpaceOnUse" cx="${B.cx}" cy="${B.cy}" r="${R*1.15}"><stop offset="0" stop-color="${A.floor}"/><stop offset="1" stop-color="${A.floor2}"/></radialGradient>
@@ -746,6 +761,8 @@ function renderStage(){
     if(preview.kind==='arrow')ov+=`<g transform="translate(${preview.x} ${preview.y})" pointer-events="none"><g transform="rotate(${preview.rot})">${shapeBody({type:'arrow',length:preview.length,width:toolStyle.arrowd.width,color:toolStyle.arrowd.color,opacity:toolStyle.arrowd.opacity,stroke:false})}</g></g>`;
     if(preview.kind==='box'){const x=Math.min(preview.x0,preview.x1),y=Math.min(preview.y0,preview.y1);ov+=`<rect x="${x}" y="${y}" width="${Math.abs(preview.x1-preview.x0)}" height="${Math.abs(preview.y1-preview.y0)}" fill="#5fd3ff" fill-opacity=".08" stroke="#5fd3ff" stroke-width="${.07*k}" stroke-dasharray="${.3*k} ${.2*k}" pointer-events="none"/>`;}
   }
+  {const ph=phasesOf(sl);if(ph.length){const T=viewT(),k=phaseIndexAt(sl,T),Bx=arenaBox(arenaAt(sl,T));
+    ov+=`<text x="${Bx.cx+Bx.h-.6*k0()}" y="${Bx.cy-Bx.h+.9*k0()}" text-anchor="end" font-size="${.8*k0()}" font-family="${FONT}" font-weight="700" fill="#ffd43b" stroke="#000" stroke-width="${.1*k0()}" paint-order="stroke" pointer-events="none">${k<0?'Starting arena':'Arena change at '+fmtMS(ph[k].from)}${isPull(sl)||sl.anim?' · now '+fmtMS(T):editPhase>=0?' (editing)':''}</text>`;}}
   // cursors last
   for(const p of peers){
     if(p.isMe)continue;const pr=p.presence||{};if(pr.slide!==curSlide||!pr.cursor)continue;
@@ -808,9 +825,9 @@ function updTimeline(){const sl=curSlideDoc();if(!sl||!sl.anim||!$('tlScrub'))re
   const ln=$('tlLen');if(document.activeElement!==ln)ln.value=+sl.animLen>0?sl.animLen:'';ln.placeholder=String(L);}
 function animTick(ts){if(!playing)return;const dt=Math.min(.1,(ts-_lastTs)/1000);_lastTs=ts;playT+=dt*playSpeed;const L=animLenOf(curSlideDoc());
   if(playT>=L){if(playLoop)playT=0;else{playT=L;playing=false;}}renderStage();updTimeline();if(playing)requestAnimationFrame(animTick);}
-function setPlaying(p){const sl=curSlideDoc();if(!sl||!sl.anim)return;if(p&&playT>=animLenOf(sl)-.01)playT=0;playing=p;if(p){setSel([]);_lastTs=performance.now();requestAnimationFrame(animTick);}updTimeline();scheduleRender();}
-$('timeline').addEventListener('click',e=>{if(e.target.id==='tlPlay')setPlaying(!playing);if(e.target.id==='tlStart'){playing=false;playT=0;updTimeline();scheduleRender();}});
-$('timeline').addEventListener('input',e=>{const t=e.target;if(t.id==='tlScrub'){playing=false;playT=+t.value;$('tlTime').textContent=fmtT(playT*1000);renderStage();syncInsp();const mb=document.querySelector('[data-act="mvAdd"]');if(mb)mb.textContent='+ Move at '+fmtT(playT*1000);}
+function setPlaying(p){if(!p)setTimeout(followPhase);const sl=curSlideDoc();if(!sl||!sl.anim)return;if(p&&playT>=animLenOf(sl)-.01)playT=0;playing=p;if(p){setSel([]);_lastTs=performance.now();requestAnimationFrame(animTick);}updTimeline();scheduleRender();}
+$('timeline').addEventListener('click',e=>{if(e.target.id==='tlPlay')setPlaying(!playing);if(e.target.id==='tlStart'){playing=false;playT=0;updTimeline();followPhase();scheduleRender();}});
+$('timeline').addEventListener('input',e=>{const t=e.target;if(t.id==='tlScrub'){playing=false;playT=+t.value;$('tlTime').textContent=fmtT(playT*1000);followPhase();renderStage();syncInsp();const mb=document.querySelector('[data-act="mvAdd"]');if(mb)mb.textContent='+ Move at '+fmtT(playT*1000);}
   if(t.id==='tlSpeed')playSpeed=+t.value;if(t.id==='tlLoop')playLoop=t.checked;});
 $('timeline').addEventListener('change',e=>{if(e.target.id==='tlLen'){const sl=curSlideDoc();const v=parseFloat(e.target.value);if(sl)edit('slides',sl.id,{...clone(sl),animLen:v>0?lim('animLen',v):0});updTimeline();}});
 
@@ -857,7 +874,7 @@ function updStatus(others){
 // ================= slides =================
 function goSlide(id,fromFollow){
   if(!fromFollow)stopFollow();
-  closeTextEd(true);curSlide=id;selIds=[];fitView();playing=false;playT=0;
+  closeTextEd(true);curSlide=id;selIds=[];editPhase=-1;pullViewT=0;_replay=null;fitView();playing=false;playT=0;
   sendPresence({slide:id,sel:[],view:[view.x,view.y,view.h]});
   renderAll();
 }
@@ -957,7 +974,7 @@ function newFightBox(){
     <div class="btnrow"><button class="pri" id="fnOk">Create & record</button><button data-close>Cancel</button></div>`);
   const ok=()=>{const name=$('fnIn').value.trim().slice(0,40)||`Fight ${n}`,id=uid(),now=Date.now();
     const f={id,name,order:(fightsSorted().slice(-1)[0]?.order||0)+1,createdAt:now,activeAt:now};
-    if(cur&&$('fnArena')&&$('fnArena').checked)f.arena=clone(arenaOf(cur));
+    if(cur&&$('fnArena')&&$('fnArena').checked){f.arena=clone(arenaOf(cur));f.arenaPhases=clone(cur.arenaPhases||[]);}
     if(edit('fights',id,f)){viewFight=id;closeModal();renderSlides();toast(`${name} is recording — start a pull`);}};
   $('fnOk').onclick=ok;$('fnIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>{$('fnIn').focus();$('fnIn').select();},30);
 }
@@ -968,12 +985,12 @@ function fightMenu(fid,rect){
   m.onclick=e=>{const a=e.target.closest('[data-m]');if(!a)return;closeMenu();
     ({rename:()=>{openModal(`<h2>Rename fight</h2><div class="row two"><label>Name</label><input type="text" id="frIn" maxlength="40" value="${esc(f.name||'')}"></div><div class="btnrow"><button class="pri" id="frOk">Save</button><button data-close>Cancel</button></div>`);
         const ok=()=>{const v=$('frIn').value.trim().slice(0,40);if(v){edit('fights',fid,{...clone(getDoc('fights',fid)),name:v});closeModal();}};$('frOk').onclick=ok;$('frIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>$('frIn').focus(),30);},
-      arena:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),arena:clone(arenaOf(cur))});toast(`New pulls in ${f.name} will use this arena`);},
+      arena:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),arena:clone(arenaOf(cur)),arenaPhases:clone(cur.arenaPhases||[])});toast(`New pulls in ${f.name} will use this arena`);},
       applyall:()=>applyFightArena(fid),
       rec:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),activeAt:Date.now()});toast(`New pulls will go into ${f.name}`);},
       del:()=>confirmBox(`Delete “${esc(f.name)}” and its ${pullsOf(fid).length} pulls for everyone? You can undo with Ctrl+Z.`,'Delete fight',()=>{pullsOf(fid).forEach(sl=>{edit('slides',sl.id,null);slideItems(sl.id).forEach(it=>edit('items',it.id,null));});edit('fights',fid,null);viewFight=null;if(!getDoc('slides',curSlide)||isPull(curSlideDoc())&&(curSlideDoc().fight||'')===fid){const m2=slidesManual();curSlide=null;if(m2[0])goSlide(m2[0].id);else renderAll();}renderSlides();})})[a.dataset.m]();};
 }
-function applyFightArena(fid){const f=getDoc('fights',fid);if(!f||!f.arena)return;pullsOf(fid).forEach(sl=>edit('slides',sl.id,{...clone(sl),arena:clone(f.arena)}));toast(`Arena applied to ${pullsOf(fid).length} pulls`);}
+function applyFightArena(fid){const f=getDoc('fights',fid);if(!f||!f.arena)return;pullsOf(fid).forEach(sl=>edit('slides',sl.id,{...clone(sl),arena:clone(f.arena),arenaPhases:clone(f.arenaPhases||[])}));toast(`Arena applied to ${pullsOf(fid).length} pulls`);}
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('#menu')&&!e.target.closest('[data-more]'))closeMenu();});
 
 // ================= tools =================
@@ -1037,13 +1054,13 @@ function refRow(k,l,selfId){return `<div class="row two"><label>${l}</label><div
 function colRow(k,l,attr='data-k'){return `<div class="row two"><label>${l}</label><input type="color" ${attr}="${k}"></div>`;}
 function chk(k,l,attr='data-k'){return `<label class="chk"><input type="checkbox" ${attr}="${k}">${l}</label>`;}
 let inspKey='';
-function arenaKey(){const sl=curSlideDoc();if(!sl)return'';const A=arenaOf(sl);return (sl.anim?'A':'')+A.shape+':'+(Array.isArray(A.parts)?A.parts.map(p=>p.type+(p.cut?'c':'')).join(','):'')+':'+(sl.fight||'')+'|';}
+function arenaKey(){const sl=curSlideDoc();if(!sl)return'';const A=editArena(sl);return (sl.anim?'A':'')+'p'+editPhase+'/'+phasesOf(sl).map(p=>p.from).join(',')+A.shape+':'+(Array.isArray(A.parts)?A.parts.map(p=>p.type+(p.cut?'c':'')).join(','):'')+':'+(sl.fight||'')+'|';}
 function buildInsp(){
   const insp=$('insp'),sl=curSlideDoc(),sp=$('slidePane'),ip=$('itemPane');
   const prevSel=buildInsp._sel,spTop=sp.scrollTop,ipTop=ip.scrollTop;buildInsp._sel=selIds.join(',');
   const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(!sl){sp.innerHTML='<p class="note">No slide selected.</p>';ip.innerHTML='';insp.classList.remove('item');return;}
-  const A=arenaOf(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
+  const A=editArena(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   {
     const items=slideItems(curSlide);
     const isUnit=t=>t==='marker'||t==='waymark'||t==='boss';
@@ -1061,6 +1078,12 @@ function buildInsp(){
         <p class="note">Applies to every player marker with that label, on every slide. A marker’s own Job setting overrides it.</p>
         <div class="btnrow"><button data-act="jobIcons">Job icons…</button></div></div>
       <div class="sect"><h2>Arena</h2>
+      ${(()=>{const ph=(Array.isArray(sl.arenaPhases)?sl.arenaPhases:[]);const timed=isPull(sl)||sl.anim;
+        return `<div style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-bottom:8px;background:#0b1430">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><b style="font-size:12px;flex:1">Arena changes</b><button class="ib" data-act="phAdd" style="color:var(--accent)">+ Change at ${fmtMS(viewT())}</button></div>
+          <div class="phrow" style="display:flex;align-items:center;gap:6px;margin:3px 0;${editPhase<0?'color:#fff':''}"><label class="chk" style="flex:1"><input type="radio" name="eph" data-editphase="-1" ${editPhase<0?'checked':''}>Starting arena</label><span class="note" style="margin:0">0:00</span></div>
+          ${ph.map((p,i)=>`<div class="phrow" style="display:flex;align-items:center;gap:6px;margin:3px 0"><label class="chk" style="flex:1"><input type="radio" name="eph" data-editphase="${i}" ${editPhase===i?'checked':''}>Change ${i+1}</label><span class="note" style="margin:0">from</span><input type="text" data-phfrom="${i}" value="${fmtMS(p.from)}" style="width:62px;padding:2px 4px" title="m:ss or seconds"><button class="ib" data-phdel="${i}" title="Remove">✕</button></div>`).join('')}
+          <p class="note" style="margin:4px 0 0">The settings below edit the arena ticked here. ${timed?'The arena switches at each time during '+(sl.anim?'playback':'replays and live pulls')+'.':'On pull or animated slides the arena switches at these times.'}</p></div>`;})()}
       ${selRow('shape','Shape',[['circle','Circle'],['square','Square'],['rect','Rectangle'],['none','None — pieces only']],'data-a')}
       ${A.shape==='rect'?numRow('w','Width (y)',.5,2,100,'data-a')+numRow('h','Height (y)',.5,2,100,'data-a'):A.shape==='none'?'':numRow('radius',A.shape==='square'?'Half-width (y)':'Radius (y)',.5,5,50,'data-a')}${numRow('cx','Center X',.5,0,200,'data-a')}${numRow('cy','Center Y',.5,0,200,'data-a')}
       ${numRow('margin','Margin (y)',.5,1,15,'data-a')}${numRow('snap','Snap (y)',.25,0,5,'data-a')}
@@ -1143,7 +1166,7 @@ function syncInsp(except,force){
   const insp=$('insp');
   const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
-  const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
+  const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=editArena(sl),act=document.activeElement;
   insp.querySelectorAll('ul.layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
   if(its.length>1)insp.querySelectorAll('[data-multi]').forEach(el=>{if(el===act&&!force)return;const k=el.dataset.multi;const vals=its.map(i=>i[k]);const same=vals.every(v=>v===vals[0]);
     if(el.type==='color'){if(same&&vals[0])el.value=vals[0];return;}const nv=same&&vals[0]!==undefined?String(+(+vals[0]).toFixed(2)):'';if(el.value!==nv)el.value=nv;if(el.type==='number')el.placeholder=same?'':'mixed';});
@@ -1188,8 +1211,9 @@ insp.addEventListener('input',e=>{
     if(el.dataset.roster){if(v)r.map[el.dataset.roster]=v;else delete r.map[el.dataset.roster];}else r.showJobs=!!v;edit('meta','roster',r);scheduleThumbs();return;}
   const sl=curSlideDoc();if(!sl)return;
   if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:v});scheduleThumbs();return;}
-  if(el.dataset.a){edit('slides',sl.id,{...clone(sl),arena:{...arenaOf(sl),[el.dataset.a]:v}});syncInsp(el);return;}
-  if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const ar=arenaOf(sl),parts=clone(ar.parts||[]);if(!parts[+i])return;parts[+i][k]=v;edit('slides',sl.id,{...clone(sl),arena:{...ar,parts}});syncInsp(el);return;}
+  if(el.dataset.a){setEditArena(sl,{...editArena(sl),[el.dataset.a]:v});syncInsp(el);return;}
+  if(el.dataset.phfrom!==undefined)return;
+  if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const ar=editArena(sl),parts=clone(ar.parts||[]);if(!parts[+i])return;parts[+i][k]=v;setEditArena(sl,{...ar,parts});syncInsp(el);return;}
   if(el.dataset.kf||el.dataset.db){const s=selItems()[0];if(!s)return;
     if(el.dataset.kf){const[i,f]=el.dataset.kf.split(':');const keys=sortedKeys(s.keys);if(!keys[+i])return;keys[+i][f]=f==='t'?lim('t',+v):lim(f,+v);const p={keys};if(+i===0&&f!=='t')Object.assign(p,{x:keys[0].x,y:keys[0].y});patchItem(s.id,p);return;}
     const[i,f]=el.dataset.db.split(':');const dbs=clone(s.debuffs||[]);if(!dbs[+i])return;dbs[+i][f]=f==='text'?String(v).slice(0,6):f==='color'?v:lim('dur',+v||0);patchItem(s.id,{debuffs:dbs});return;}
@@ -1202,7 +1226,9 @@ insp.addEventListener('input',e=>{
   if(k==='role'&&s.type==='marker'){}
   patchItem(s.id,patch);syncInsp(el);
 });
-insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.k==='track'||e.target.dataset.st==='anim'||e.target.dataset.k==='tele'||e.target.dataset.k==='hit')setTimeout(buildInsp);if(e.target.dataset.st==='anim'){playT=0;playing=false;renderTimeline();}if(e.target.dataset.a==='shape'||e.target.dataset.ap&&e.target.dataset.ap.endsWith(':cut')||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
+insp.addEventListener('change',e=>{endGesture();
+  if(e.target.dataset.phfrom!==undefined){const sl=curSlideDoc();if(!sl)return;const i=+e.target.dataset.phfrom,ph=clone(sl.arenaPhases||[]);if(!ph[i])return;ph[i].from=lim('t',parseTime(e.target.value));
+    const keep=ph[i];ph.sort((a,b)=>a.from-b.from);if(editPhase===i)editPhase=ph.indexOf(keep);edit('slides',sl.id,{...clone(sl),arenaPhases:ph});setTimeout(()=>{buildInsp();scheduleRender();});return;}if(e.target.dataset.k==='track'||e.target.dataset.st==='anim'||e.target.dataset.k==='tele'||e.target.dataset.k==='hit')setTimeout(buildInsp);if(e.target.dataset.st==='anim'){playT=0;playing=false;renderTimeline();}if(e.target.dataset.a==='shape'||e.target.dataset.ap&&e.target.dataset.ap.endsWith(':cut')||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
 insp.addEventListener('focusout',e=>{endGesture();if(e.target&&e.target.type==='number')setTimeout(()=>syncInsp(null,true));});
 // middle-click a row in the attack/layer list = same as its show/hide dot
 insp.addEventListener('mousedown',e=>{if((e.button===1||e.shiftKey)&&e.target.closest('[data-lsel]'))e.preventDefault();});
@@ -1216,7 +1242,7 @@ insp.addEventListener('click',e=>{
     if(e.ctrlKey||e.metaKey){setSel(selIds.includes(id)?selIds.filter(x=>x!==id):[...selIds,id]);lastLsel=id;return;}
     if(e.shiftKey&&lastLsel){const rows=[...li.parentElement.querySelectorAll('[data-lsel]')].map(r=>r.dataset.lsel);const i0=rows.indexOf(lastLsel),i1=rows.indexOf(id);
       if(i0>=0&&i1>=0){const rng=rows.slice(Math.min(i0,i1),Math.max(i0,i1)+1);setSel([...new Set([...selIds,...rng])]);return;}}
-    if(it&&it.auto)autoSeen.set(it.id,Date.now());lastLsel=id;setSel([id]);return;}
+    if(it&&it.auto){autoSeen.set(it.id,Date.now());pullViewT=Math.max(0,((it.at||0)-pullT0(slideItems(curSlide)))/1000);setTimeout(followPhase);}lastLsel=id;setSel([id]);return;}
   const pk=e.target.closest('[data-pick]');if(pk&&selIds.length===1){picking={id:selIds[0],field:pk.dataset.pick};renderTools();toast('Click a player or item on the arena (Esc to cancel)');return;}
   const one=selItems()[0];
   const hd=e.target.closest('[data-head]');if(hd&&one){patchItem(one.id,{head:hd.dataset.head||null});setTimeout(buildInsp);return;}
@@ -1225,26 +1251,31 @@ insp.addEventListener('click',e=>{
   const dbo=e.target.closest('[data-dbaoe]');if(dbo&&one){const d=(one.debuffs||[])[+dbo.dataset.dbaoe];if(d){const at=r2((+d.start||0)+(+d.dur||0));
     const a=make('circle',{x:one.x,y:one.y,radius:5,color:d.color||'#b46bff',name:(d.text||'Debuff')+' AoE',target:one.id,attach:true,start:at,tele:0,hit:.8});edit('items',a.id,a);toast(`AoE added — goes off at ${fmtT(at*1000)}`);}return;}
   const kfd=e.target.closest('[data-kfdel]');if(kfd&&one){const keys=sortedKeys(one.keys);keys.splice(+kfd.dataset.kfdel,1);patchItem(one.id,keys.length?{keys,...(keys[0]?{x:keys[0].x,y:keys[0].y}:{})}:{keys:null});setTimeout(buildInsp);return;}
-  const dp=e.target.closest('[data-delpart]');if(dp){const sl=curSlideDoc();if(!sl)return;const ar=arenaOf(sl),parts=clone(ar.parts||[]);parts.splice(+dp.dataset.delpart,1);edit('slides',sl.id,{...clone(sl),arena:{...ar,parts}});setTimeout(buildInsp);return;}
+  const ep=e.target.closest('[data-editphase]');if(ep){editPhase=+ep.dataset.editphase;const sl=curSlideDoc(),ph=sl&&(sl.arenaPhases||[])[editPhase];const T=ph?+ph.from||0:0;
+    if(sl&&sl.anim){playing=false;playT=T;updTimeline();}else if(isPull(sl)){pullViewT=T;}buildInsp();scheduleRender();return;}
+  const pd=e.target.closest('[data-phdel]');if(pd){const sl=curSlideDoc();if(!sl)return;const ph=clone(sl.arenaPhases||[]);ph.splice(+pd.dataset.phdel,1);editPhase=-1;edit('slides',sl.id,{...clone(sl),arenaPhases:ph});setTimeout(buildInsp);return;}
+  const dp=e.target.closest('[data-delpart]');if(dp){const sl=curSlideDoc();if(!sl)return;const ar=editArena(sl),parts=clone(ar.parts||[]);parts.splice(+dp.dataset.delpart,1);setEditArena(sl,{...ar,parts});setTimeout(buildInsp);return;}
   const b=e.target.closest('[data-act]');if(b)action(b.dataset.act);
 });
 function action(a){
   const sl=curSlideDoc();const s=selItems()[0];
   switch(a){
-    case'addPartCircle':case'addPartRect':{if(!sl)return;const ar=arenaOf(sl),B=arenaBox(ar),parts=clone(ar.parts||[]);
+    case'addPartCircle':case'addPartRect':{if(!sl)return;const ar=editArena(sl),B=arenaBox(ar),parts=clone(ar.parts||[]);
       parts.push(a==='addPartRect'?{type:'rect',x:r2(B.cx),y:r2(B.cy+B.in),w:10,h:16,rot:0,cut:false}:{type:'circle',x:r2(B.cx+B.in),y:r2(B.cy),r:8,cut:false});
-      edit('slides',sl.id,{...clone(sl),arena:{...ar,parts}});setTimeout(buildInsp);return;}
-    case'copyArena':if(sl){writeClip('arena',clone(arenaOf(sl)));toast('Arena copied — open another slide and press Paste arena');buildInsp();}return;
-    case'pasteArena':{const ar=readClip('arena');if(sl&&ar){edit('slides',sl.id,{...clone(sl),arena:clone(ar)});fitView();setTimeout(buildInsp);toast('Arena pasted');}return;}
-    case'fightArena':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl))});toast(`New pulls in ${f.name} will use this arena`);}return;}
-    case'fightArenaAll':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl))});applyFightArena(f.id);}return;}
-    case'resetArena':if(sl)edit('slides',sl.id,{...clone(sl),arena:{...arenaOf(sl),bg:DEFAULT_ARENA.bg,floor:DEFAULT_ARENA.floor,floor2:DEFAULT_ARENA.floor2,edge:DEFAULT_ARENA.edge}});return;
+      setEditArena(sl,{...ar,parts});setTimeout(buildInsp);return;}
+    case'copyArena':if(sl){writeClip('arena',clone(editArena(sl)));toast('Arena copied — open another slide and press Paste arena');buildInsp();}return;
+    case'pasteArena':{const ar=readClip('arena');if(sl&&ar){setEditArena(sl,ar);fitView();setTimeout(buildInsp);toast('Arena pasted');}return;}
+    case'fightArena':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl)),arenaPhases:clone(sl.arenaPhases||[])});toast(`New pulls in ${f.name} will use this arena`);}return;}
+    case'fightArenaAll':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl)),arenaPhases:clone(sl.arenaPhases||[])});setTimeout(()=>applyFightArena(f.id),50);}return;}
+    case'resetArena':if(sl)setEditArena(sl,{...editArena(sl),bg:DEFAULT_ARENA.bg,floor:DEFAULT_ARENA.floor,floor2:DEFAULT_ARENA.floor2,edge:DEFAULT_ARENA.edge});return;
     case'waymarks':{const A=arenaOf(sl),d=Math.max(2,A.radius-5);slideItems(curSlide).filter(i=>i.type==='waymark').forEach(i=>edit('items',i.id,null));let z=newZ();
       [['A',0],['1',45],['B',90],['2',135],['C',180],['3',225],['D',270],['4',315]].forEach(([m,an])=>{const it=make('waymark',{mark:m,name:'Waymark '+m,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
     case'party':{const A=arenaOf(sl),d=Math.min(8,A.radius*.4);let z=newZ();
       [['tank','MT',0],['tank','OT',90],['healer','H1',270],['healer','H2',180],['dps','M1',225],['dps','M2',135],['dps','R1',315],['dps','R2',45]].forEach(([role,t,an])=>{const it=make('marker',{role,text:t,name:t,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
     case'deselect':setSel([]);return;
     case'jobIcons':jobIconsBox();return;
+    case'phAdd':{if(!sl)return;const T=r2(viewT()),ph=clone(sl.arenaPhases||[]);ph.push({from:T>0?T:30,arena:clone(arenaAt(sl,T))});ph.sort((a,b)=>a.from-b.from);
+      editPhase=ph.findIndex(p=>p.from===(T>0?T:30));edit('slides',sl.id,{...clone(sl),arenaPhases:ph});setTimeout(()=>{buildInsp();scheduleRender();});toast('Arena change added — edit it below');return;}
     case'mHide':selItems().forEach(it=>it.auto?patchItem(it.id,{pinned:false}):patchItem(it.id,{visible:false}));setTimeout(buildInsp);return;
     case'mShow':selItems().forEach(it=>it.auto?patchItem(it.id,{pinned:true,visible:true}):patchItem(it.id,{visible:true}));setTimeout(buildInsp);return;
     case'mLock':selItems().forEach(it=>patchItem(it.id,{locked:true}));setTimeout(buildInsp);return;
@@ -1513,7 +1544,7 @@ function onSnap(col){return snap=>{
   const prev=server[col];
   server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};let w=_wrap.get(v);if(!w||w.id!==d.id){w={...v,id:d.id};_wrap.set(v,w);}return[d.id,w];}));dataVer++;
   if(col==='items'&&!snap.metadata.fromCache)setTimeout(fixOldHits,1500);
-  if(col==='items'){const now=Date.now();if(autoInit){for(const[id,it]of server.items)if(it.auto&&!prev.has(id)&&!autoSeen.has(id))autoSeen.set(id,now);}autoInit=true;}
+  if(col==='items'){const now=Date.now();if(autoInit){for(const[id,it]of server.items)if(it.auto&&!prev.has(id)&&!autoSeen.has(id)){autoSeen.set(id,now);if(it.slide===curSlide){const sl0=curSlideDoc();if(sl0&&sl0.startedAt)pullViewT=Math.max(pullViewT,((it.at||0)-sl0.startedAt)/1000);}}}autoInit=true;}
   if(col==='slides'){if(slidesKnown&&followPulls&&!drag){const nw=[...server.slides.values()].filter(sl=>isPull(sl)&&!slidesKnown.has(sl.id)).sort((a,b)=>(b.pull||0)-(a.pull||0))[0];
       if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{viewFight=nw.fight||'';goSlide(nw.id);revealCard(nw.id);const f=nw.fight&&getDoc('fights',nw.fight);toast((f?f.name+' — ':'')+nw.title+' started');});}}
     slidesKnown=new Set(server.slides.keys());}

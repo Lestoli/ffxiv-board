@@ -159,6 +159,8 @@ class Board:
             self.slide, self.slide_t0, self.z = sid, unix_ms, 0
             slide = {"id": sid, "title": f"Pull #{self.pull_n}", "kind": "pull", "pull": self.pull_n, "fight": fid,
                      "order": self.pull_n, "startedAt": unix_ms, "arena": arena}
+            if (fight or {}).get("arenaPhases"):
+                slide["arenaPhases"] = fight["arenaPhases"]   # arena changes during the fight (from: seconds)
             self.q.put(("slide", f"/slides/{sid}", slide))
         print(f"\n=== {self.fight_name + ' - ' if self.fight_name else ''}Pull #{self.pull_n} started ===")
 
