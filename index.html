@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v30</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v31</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -567,6 +567,13 @@ function iconMap(){const m=metaDoc('icons').map;return m&&typeof m==='object'?m:
 const showJobs=()=>!!metaDoc('roster').showJobs;
 function markerJob(s){const j=s.job||rosterMap()[String(s.text||'').trim().toUpperCase()]||'';return JOB_ROLE[j]?j:'';}
 let _svgPre='L';
+// ===== per-action size settings: one edit applies to every attack with the same game action ID (past and future pulls) =====
+const STAT_KEYS=new Set(['radius','angle','inner','outer','width','length','count']);
+function actionMap(){const m=metaDoc('actions').map;return m&&typeof m==='object'?m:{};}
+const actionKey=it=>it&&it.auto&&!it.ownStats&&it.ev&&it.ev.actionId!==undefined&&it.ev.actionId!==''?'a'+it.ev.actionId:null;
+function withStats(it){const k=actionKey(it);if(!k)return it;const o=actionMap()[k];return o?{...it,...o}:it;}
+function setActionStat(it,k,v){const key=actionKey(it);if(!key)return false;const m=clone(metaDoc('actions'));m.id='actions';m.map={...(m.map||{})};m.map[key]={...(m.map[key]||{}),[k]:v};edit('meta','actions',m);return true;}
+const sameActionCount=it=>{const key=actionKey(it);if(!key)return 0;let n=0;for(const x of allDocs('items').values())if(actionKey(x)===key)n++;return n;};
 // ===== animated slides: timing, telegraphs, movement keyframes, debuff timers =====
 let playT=0,playing=false,playSpeed=1,playLoop=false,_lastTs=0,_animT=null;
 const nz=v=>v===undefined||v===null||v===''?null:+v;
@@ -675,6 +682,7 @@ function itemSVG(s,A,live,isSel){
   return g;
 }
 function buildSlideSVG(sl,items,o){
+  if(!o.live)items=items.map(withStats);
   const A=arenaAt(sl,o.live?viewT():(o.t||0));A._pre=o.pre;const P=o.pre,cx=A.cx,cy=A.cy,B=arenaBox(A),R=Math.max(B.in,1);
   const parts=arenaParts(A),adds=parts.filter(p=>!p.cut),cuts=parts.filter(p=>p.cut);
   const bx0=B.cx-B.h,by0=B.cy-B.h,bw=2*B.h;
@@ -711,7 +719,7 @@ function exportSVG(sl,size){const B=arenaBox(arenaOf(sl)),h=B.h,_t=sl.id===curSl
 
 // items as displayed (my drag + peers' live drags applied)
 function displayItems(){
-  let items=slideItems(curSlide);
+  let items=slideItems(curSlide).map(withStats);
   const ov={};
   for(const p of peers){if(p.isMe&&p.sameTab)continue;const d=p.presence&&p.presence.drag;if(d&&d.s===curSlide&&d.m&&typeof d.m==='object')Object.assign(ov,d.m);}
   if(Object.keys(ov).length)items=items.map(it=>{const m=ov[it.id];if(!Array.isArray(m))return it;const n={...it,x:+m[0]||it.x,y:+m[1]||it.y};if(m.length>2&&isFinite(m[2]))n.rot=+m[2];return n;});
@@ -780,7 +788,7 @@ function inkBBox(it){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of it.pts||[[
 // thumbnails
 let tq=null;function scheduleThumbs(){clearTimeout(tq);tq=setTimeout(renderSlides,220);}
 const _thumbCache=new Map();
-function thumbSVG(sl){const items=slideItems(sl.id);const sig=ser(sl)+'|'+ser(metaDoc('roster'))+'|'+ser(metaDoc('icons'))+'|'+items.map(ser).join(',');
+function thumbSVG(sl){const items=slideItems(sl.id);const sig=ser(sl)+'|'+ser(metaDoc('actions'))+'|'+ser(metaDoc('roster'))+'|'+ser(metaDoc('icons'))+'|'+items.map(ser).join(',');
   const c=_thumbCache.get(sl.id);if(c&&c.sig===sig)return c.svg;const B=arenaBox(arenaOf(sl)),h=B.h;
   const svg=`<svg viewBox="${B.cx-h} ${B.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,items,{pre:'t'+sl.id,thumb:true,live:false})}</svg>`;_thumbCache.set(sl.id,{sig,svg});return svg;}
 // keep existing DOM nodes when their HTML hasn't changed (no flicker, scroll position stays put)
@@ -1058,7 +1066,7 @@ function arenaKey(){const sl=curSlideDoc();if(!sl)return'';const A=editArena(sl)
 function buildInsp(){
   const insp=$('insp'),sl=curSlideDoc(),sp=$('slidePane'),ip=$('itemPane');
   const prevSel=buildInsp._sel,spTop=sp.scrollTop,ipTop=ip.scrollTop;buildInsp._sel=selIds.join(',');
-  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+(its[0].ownStats?'S':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(!sl){sp.innerHTML='<p class="note">No slide selected.</p>';ip.innerHTML='';insp.classList.remove('item');return;}
   const A=editArena(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   {
@@ -1133,7 +1141,9 @@ function buildInsp(){
       ${s.auto&&s.ev?(()=>{const e=s.ev,t0=pullT0(slideItems(curSlide));const row=(k,v)=>v!==undefined&&v!==''&&v!==null?`<b>${k}</b><span>${esc(v)}</span>`:'';
         return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time',fmtT((s.at||t0)-t0))}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${(()=>{const h=hitsOf(e),r=rankOf(e);return (h.length?`<b>Main target</b><span>${esc(h[0].name)} (${esc(h[0].job)})</span>`:'')+(r?`<b>Distance rank</b><span>${distBadge(s,true)||'#'+esc(r)}</span>`:'')+
           (h.length>1?`<b>Also hit</b><span>${h.slice(1).map(x=>`${esc(x.name)} (${esc(x.job)}) #${x.rank}`).join('<br>')}</span>`:'');})()}</div>
-          <div class="chks">${chk('pinned','Keep showing (pinned)')}</div></div>`;})():''}
+          <div class="chks">${chk('pinned','Keep showing (pinned)')}</div>
+          ${e.actionId!==undefined&&e.actionId!==''?`<div style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:6px;background:#0b1430">${s.ownStats?`<p class="note" style="margin:0 0 4px">Size settings below change <b>only this one</b>.</p>`:`<p class="note" style="margin:0 0 4px">Size settings below (angle, inner radius, length, width…) change <b>every ${esc(e.action||'attack')}</b> — ${sameActionCount(s)} on this board, plus future pulls.</p>`}
+            <div class="chks" style="margin:0">${chk('ownStats','Change only this one')}</div></div>`:''}</div>`;})():''}
       <div class="sect">${f}</div>
       ${s.type==='marker'?`<div class="sect"><h2>Over their head</h2>
         <div style="display:flex;flex-wrap:wrap;gap:4px"><button data-head="" title="None" style="width:34px;height:34px;padding:0;${!s.head?'outline:2px solid #fff':''}">—</button>${HEAD_GROUPS.map(([g,list])=>list.map(([k,l])=>`<button data-head="${k}" title="${l}" style="width:34px;height:34px;padding:0;${s.head===k?'outline:2px solid #fff;':''}"><svg viewBox="-11 -11 22 22" width="26" height="26">${headGlyph(k,20)}</svg></button>`).join('')).join('')}</div>
@@ -1164,11 +1174,11 @@ function buildInsp(){
 }
 function syncInsp(except,force){
   const insp=$('insp');
-  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+(its[0].ownStats?'S':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=editArena(sl),act=document.activeElement;
   insp.querySelectorAll('ul.layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
-  if(its.length>1)insp.querySelectorAll('[data-multi]').forEach(el=>{if(el===act&&!force)return;const k=el.dataset.multi;const vals=its.map(i=>i[k]);const same=vals.every(v=>v===vals[0]);
+  if(its.length>1)insp.querySelectorAll('[data-multi]').forEach(el=>{if(el===act&&!force)return;const k=el.dataset.multi;const vals=its.map(i=>withStats(i)[k]);const same=vals.every(v=>v===vals[0]);
     if(el.type==='color'){if(same&&vals[0])el.value=vals[0];return;}const nv=same&&vals[0]!==undefined?String(+(+vals[0]).toFixed(2)):'';if(el.value!==nv)el.value=nv;if(el.type==='number')el.placeholder=same?'':'mixed';});
   insp.querySelectorAll('[data-roster]').forEach(el=>{if(el!==act||force){const v=rosterMap()[el.dataset.roster]||'';if(el.value!==v)el.value=v;}});
   insp.querySelectorAll('[data-showjobs]').forEach(el=>{el.checked=showJobs();});
@@ -1179,7 +1189,7 @@ function syncInsp(except,force){
     if(el.dataset.st)v=sl&&(el.dataset.st==='moveSpeed'?slideSpeed(sl):el.dataset.st==='animLen'?(+sl.animLen||0):sl[el.dataset.st]);
     else if(el.dataset.a)v=A[el.dataset.a]??(el.dataset.a==='w'?40:el.dataset.a==='h'?30:undefined);
     else if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const pt=(A.parts||[])[+i];v=pt?pt[k]:undefined;}
-    else{if(!s)return;const k=el.dataset.k;if(k==='pd'||k==='pa'){const p=polar(s);v=k==='pd'?p.d:p.a;}else v=s[k];if(k==='stroke'&&v===undefined)v=true;if(k==='visible'&&v===undefined)v=true;}
+    else{if(!s)return;const k=el.dataset.k;if(k==='pd'||k==='pa'){const p=polar(s);v=k==='pd'?p.d:p.a;}else v=withStats(s)[k];if(k==='stroke'&&v===undefined)v=true;if(k==='visible'&&v===undefined)v=true;}
     if(el.type==='checkbox')el.checked=!!v;else{const nv=typeof v==='number'?String(+v.toFixed(2)):(v??'');if(el.value!==nv)el.value=nv;}
   });
 }
@@ -1206,7 +1216,7 @@ insp.addEventListener('input',e=>{
   const key=el.dataset.k||el.dataset.a||(el.dataset.ap&&el.dataset.ap.split(':')[1])||el.dataset.multi;
   if(typeof v==='number'&&LIMITS[key]){const c=lim(key,v);if(c!==v){v=c;if(el.type==='number'&&document.activeElement===el)el.title=`Limited to ${LIMITS[key][0]} … ${LIMITS[key][1]}`;}}
   beginGesture();
-  if(el.dataset.multi){selItems().forEach(it=>patchItem(it.id,{[el.dataset.multi]:v}));return;}
+  if(el.dataset.multi){const mk=el.dataset.multi;const done=new Set();selItems().forEach(it=>{const ak=actionKey(it);if(ak&&STAT_KEYS.has(mk)){if(!done.has(ak)){done.add(ak);setActionStat(it,mk,v);}}else patchItem(it.id,{[mk]:v});});return;}
   if(el.dataset.roster!==undefined||el.dataset.showjobs!==undefined){const r=clone(metaDoc('roster'));r.id='roster';r.map={...(r.map||{})};
     if(el.dataset.roster){if(v)r.map[el.dataset.roster]=v;else delete r.map[el.dataset.roster];}else r.showJobs=!!v;edit('meta','roster',r);scheduleThumbs();return;}
   const sl=curSlideDoc();if(!sl)return;
@@ -1224,9 +1234,10 @@ insp.addEventListener('input',e=>{
   if(k==='target'&&!v)patch.attach=false;
   if(k==='target'&&v&&!ROTATABLE.has(s.type))patch.attach=true;
   if(k==='role'&&s.type==='marker'){}
+  if(STAT_KEYS.has(k)&&actionKey(s)&&setActionStat(s,k,v)){syncInsp(el);return;}
   patchItem(s.id,patch);syncInsp(el);
 });
-insp.addEventListener('change',e=>{endGesture();
+insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.k==='ownStats')setTimeout(buildInsp);
   if(e.target.dataset.phfrom!==undefined){const sl=curSlideDoc();if(!sl)return;const i=+e.target.dataset.phfrom,ph=clone(sl.arenaPhases||[]);if(!ph[i])return;ph[i].from=lim('t',parseTime(e.target.value));
     const keep=ph[i];ph.sort((a,b)=>a.from-b.from);if(editPhase===i)editPhase=ph.indexOf(keep);edit('slides',sl.id,{...clone(sl),arenaPhases:ph});setTimeout(()=>{buildInsp();scheduleRender();});return;}if(e.target.dataset.k==='track'||e.target.dataset.st==='anim'||e.target.dataset.k==='tele'||e.target.dataset.k==='hit')setTimeout(buildInsp);if(e.target.dataset.st==='anim'){playT=0;playing=false;renderTimeline();}if(e.target.dataset.a==='shape'||e.target.dataset.ap&&e.target.dataset.ap.endsWith(':cut')||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
 insp.addEventListener('focusout',e=>{endGesture();if(e.target&&e.target.type==='number')setTimeout(()=>syncInsp(null,true));});
