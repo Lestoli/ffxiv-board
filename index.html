@@ -143,7 +143,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v9</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v10</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -335,7 +335,17 @@ function stopReplay(){slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete
 const TIER=t=>t==='waymark'?1:t==='tether'?1.5:(t==='ink'||t==='arrow'||t==='marker'||t==='text')?2:0;
 function slideItems(sid){return[...allDocs('items').values()].filter(i=>i.slide===sid).sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));}
 function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
-function arenaOf(sl){return{...DEFAULT_ARENA,...((sl&&sl.arena)||{})};}
+// sane limits so a typo (e.g. 800) can't build a gigantic canvas
+const COORD_MIN=-200,COORD_MAX=400;
+const LIMITS={x:[COORD_MIN,COORD_MAX],y:[COORD_MIN,COORD_MAX],cx:[COORD_MIN,COORD_MAX],cy:[COORD_MIN,COORD_MAX],
+  radius:[0,150],r:[0,150],w:[0,200],h:[0,200],width:[0,200],length:[0,200],inner:[0,150],outer:[0,150],
+  margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
+function lim(k,v){const L=LIMITS[k];return L&&typeof v==='number'?clamp(v,L[0],L[1]):v;}
+function arenaOf(sl){const A={...DEFAULT_ARENA,...((sl&&sl.arena)||{})};
+  for(const k of['cx','cy','margin','gridStep','snap','w','h'])if(typeof A[k]==='number')A[k]=lim(k,A[k]);
+  A.radius=clamp(+A.radius||20,1,150);
+  if(Array.isArray(A.parts))A.parts=A.parts.slice(0,40).map(p=>p&&typeof p==='object'?{...p,x:lim('x',+p.x||0),y:lim('y',+p.y||0),r:lim('r',+p.r||0),w:lim('w',+p.w||0),h:lim('h',+p.h||0)}:p);
+  return A;}
 
 // write queue: one write at a time per doc, newest value wins
 const wq=new Map();
@@ -515,11 +525,11 @@ function buildSlideSVG(sl,items,o){
   s+=adds.map(p=>partSVG(p,`fill="url(#${P}fg)"`)).join('');
   if(cuts.length)s+=`<g>${cuts.map(p=>partSVG(p,`fill="${A.bg}"`)).join('')}</g><g mask="url(#${P}cl)"><g filter="url(#${P}gl)">${cuts.map(p=>partSVG(p,`fill="none" stroke="${A.edge}" stroke-width="0.6"`)).join('')}</g></g>`;
   let g='';
-  if(A.grid&&A.gridStep>0&&!o.thumb){const st=A.gridStep,n=Math.ceil((B.h+Math.max(Math.abs(B.cx-cx),Math.abs(B.cy-cy))+1)/st);
+  if(A.grid&&A.gridStep>0&&!o.thumb){const st=A.gridStep,n=Math.min(150,Math.ceil((B.h+Math.max(Math.abs(B.cx-cx),Math.abs(B.cy-cy))+1)/st));
     for(let i=-n;i<=n;i++){const off=i*st,major=Math.abs(off/5-Math.round(off/5))<1e-6,op=major?.16:.06,sw=major?.07:.04;
       g+=`<line x1="${cx+off}" y1="${by0}" x2="${cx+off}" y2="${by0+bw}" stroke="#bfe6ff" stroke-opacity="${op}" stroke-width="${sw}"/><line x1="${bx0}" y1="${cy+off}" x2="${bx0+bw}" y2="${cy+off}" stroke="#bfe6ff" stroke-opacity="${op}" stroke-width="${sw}"/>`;}}
   if(A.spokes)for(let k=0;k<8;k++){const t=k*Math.PI/4,L=B.h*3;g+=`<line x1="${cx}" y1="${cy}" x2="${cx+L*Math.sin(t)}" y2="${cy-L*Math.cos(t)}" stroke="#bfe6ff" stroke-opacity="${k%2?.1:.18}" stroke-width="0.07"${k%2?' stroke-dasharray="0.5 0.5"':''}/>`;}
-  if(A.rings)for(let r=5;r<(A.shape==='circle'&&!parts.some(p=>p!==parts[0])?R:B.h*2)-.01;r+=5)g+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#bfe6ff" stroke-opacity=".14" stroke-width="0.07" stroke-dasharray="0.6 0.4"/>`;
+  if(A.rings)for(let r=5;r<Math.min(200,(A.shape==='circle'&&!parts.some(p=>p!==parts[0])?R:B.h*2))-.01;r+=5)g+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#bfe6ff" stroke-opacity=".14" stroke-width="0.07" stroke-dasharray="0.6 0.4"/>`;
   g+=`<circle cx="${cx}" cy="${cy}" r="0.25" fill="#bfe6ff" fill-opacity=".5"/>`;
   s+=`<g mask="url(#${P}cl)">${g}</g>`;
   if(A.cardinals){const d=B.in+A.margin*.5,fs=Math.min(1.8,A.margin*.55);
@@ -800,7 +810,7 @@ function reorder(dir){
 function faceToward(s,out){const A=arenaOf(curSlideDoc()),dx=A.cx-s.x,dy=A.cy-s.y;if(Math.hypot(dx,dy)<1e-9)return;patchItem(s.id,{rot:normRot(Math.atan2(dx,-dy)*180/Math.PI+(out?180:0))});}
 
 // ================= inspector =================
-function numRow(k,l,step,min,max,attr='data-k'){return `<div class="row"><label>${l}</label><input type="range" ${attr}="${k}" step="${step}" min="${min}" max="${max}"><input type="number" ${attr}="${k}" step="${step}"></div>`;}
+function numRow(k,l,step,min,max,attr='data-k'){const L=LIMITS[String(k).split(':').pop()];return `<div class="row"><label>${l}</label><input type="range" ${attr}="${k}" step="${step}" min="${min}" max="${max}"><input type="number" ${attr}="${k}" step="${step}"${L?` min="${L[0]}" max="${L[1]}"`:''}></div>`;}
 function selRow(k,l,opts,attr='data-k'){return `<div class="row two"><label>${l}</label><select ${attr}="${k}">${opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>`;}
 function txtRow(k,l,attr='data-k'){return `<div class="row two"><label>${l}</label><input type="text" ${attr}="${k}"></div>`;}
 function areaRow(k,l,attr='data-k'){return `<div class="row two"><label>${l}</label><textarea rows="2" ${attr}="${k}"></textarea></div>`;}
@@ -897,7 +907,10 @@ function fmtT(ms){ms=Math.max(0,Math.round(ms||0));const m=Math.floor(ms/60000),
 function pullT0(items){const a=items.filter(i=>i.auto&&i.at).map(i=>i.at);const sl=curSlideDoc();return sl&&sl.startedAt?sl.startedAt:(a.length?Math.min(...a):0);}
 const insp=$('insp');
 insp.addEventListener('input',e=>{
-  const el=e.target,v=readVal(el);if(v===null)return;beginGesture();
+  const el=e.target;let v=readVal(el);if(v===null)return;
+  const key=el.dataset.k||el.dataset.a||(el.dataset.ap&&el.dataset.ap.split(':')[1])||el.dataset.multi;
+  if(typeof v==='number'&&LIMITS[key]){const c=lim(key,v);if(c!==v){v=c;if(el.type==='number'&&document.activeElement===el)el.title=`Limited to ${LIMITS[key][0]} … ${LIMITS[key][1]}`;}}
+  beginGesture();
   if(el.dataset.multi){selItems().forEach(it=>patchItem(it.id,{[el.dataset.multi]:v}));return;}
   const sl=curSlideDoc();if(!sl)return;
   if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:v});scheduleThumbs();return;}
@@ -913,7 +926,7 @@ insp.addEventListener('input',e=>{
   patchItem(s.id,patch);syncInsp(el);
 });
 insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.a==='shape'||e.target.dataset.ap&&e.target.dataset.ap.endsWith(':cut')||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
-insp.addEventListener('focusout',()=>endGesture());
+insp.addEventListener('focusout',e=>{endGesture();if(e.target&&e.target.type==='number')setTimeout(()=>syncInsp(null,true));});
 // middle-click a row in the attack/layer list = same as its show/hide dot
 insp.addEventListener('mousedown',e=>{if(e.button===1&&e.target.closest('[data-lsel]'))e.preventDefault();});
 insp.addEventListener('auxclick',e=>{if(e.button!==1)return;const li=e.target.closest('[data-lsel]');if(!li||!canWrite)return;e.preventDefault();
