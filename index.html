@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v22</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v23</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -271,7 +271,7 @@ const ORANGE='#ff8a2b';
 const DEF={
   circle:{name:'Circle AoE',radius:6,color:ORANGE,opacity:.45},
   donut:{name:'Donut',inner:8,outer:20,color:ORANGE,opacity:.45},
-  rect:{name:'Line AoE',width:8,length:40,rot:0,anchor:'center',color:ORANGE,opacity:.45},
+  rect:{name:'Line AoE',width:8,length:40,rot:0,anchor:'back',color:ORANGE,opacity:.45},
   cone:{name:'Cone',radius:20,angle:90,rot:0,color:ORANGE,opacity:.45},
   cross:{name:'Cross',width:8,length:20,rot:0,color:ORANGE,opacity:.45},
   star:{name:'Star',width:6,length:20,rot:0,color:ORANGE,opacity:.45},
@@ -293,7 +293,7 @@ const ROT=N('rot','Rotation °',1,-180,180);
 const FIELDS={
   circle:[N('radius','Radius',.5,0,50)],
   donut:[N('inner','Inner radius',.5,0,50),N('outer','Outer radius',.5,0,60)],
-  rect:[N('width','Width',.5,0,80),N('length','Length',.5,0,80),ROT,S('anchor','Anchor',[['center','Centered on X/Y'],['back','Back edge at X/Y']])],
+  rect:[N('width','Width',.5,0,80),N('length','Length',.5,0,80),ROT,S('anchor','Starts',[['back','At X/Y, extends forward'],['center','Centered on X/Y']])],
   cone:[N('radius','Radius',.5,0,60),N('angle','Cone angle °',1,1,360),ROT],
   cross:[N('width','Arm width',.5,0,40),N('length','Arm length',.5,0,60),ROT],
   star:[N('width','Arm width',.5,0,40),N('length','Arm length',.5,0,60),ROT],
@@ -614,7 +614,7 @@ function shapeBody(s,live){
   switch(s.type){
     case'circle':return `<circle r="${Math.max(0,s.radius)}" ${aoeAttrs(s)}/>`;
     case'donut':{const o=Math.max(0,s.outer),i=Math.max(0,Math.min(s.inner,o));return `<path d="${circlePath(o)}${i>0?circlePath(i):''}" fill-rule="evenodd" ${aoeAttrs(s)}/>`;}
-    case'rect':{const w=Math.max(0,s.width),l=Math.max(0,s.length),y=s.anchor==='back'?-l:-l/2;return `<rect x="${-w/2}" y="${y}" width="${w}" height="${l}" ${aoeAttrs(s)}/>`;}
+    case'rect':{const w=Math.max(0,s.width),l=Math.max(0,s.length),y=s.anchor==='center'?-l/2:-l;return `<rect x="${-w/2}" y="${y}" width="${w}" height="${l}" ${aoeAttrs(s)}/>`;}
     case'cone':{const r=Math.max(0,s.radius),a=Math.max(0,s.angle);if(a>=359.99)return `<circle r="${r}" ${aoeAttrs(s)}/>`;
       const h=a/2*Math.PI/180,x1=-r*Math.sin(h),y1=-r*Math.cos(h),x2=r*Math.sin(h);
       return `<path d="M0 0L${x1} ${y1}A${r} ${r} 0 ${a>180?1:0} 1 ${x2} ${y1}Z" ${aoeAttrs(s)}/>`;}
