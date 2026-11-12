@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v29</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v30</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -275,7 +275,7 @@ const DEF={
   cone:{name:'Cone',radius:20,angle:90,rot:0,color:ORANGE,opacity:.45},
   cross:{name:'Cross',width:8,length:20,rot:0,color:ORANGE,opacity:.45},
   star:{name:'Star',width:6,length:20,rot:0,color:ORANGE,opacity:.45},
-  tether:{name:'Tether',a:'',b:'',width:.3,color:'#ff5fd2',opacity:.95,dashed:false,showDist:true,distSize:1.1},
+  tether:{name:'Tether',a:'',b:'',width:.3,color:'#ff5fd2',opacity:.95,dashed:false,showDist:true,distSize:0.8},
   arrow:{name:'Arrow',width:.6,length:8,rot:0,color:'#ffffff',opacity:.95,stroke:false},
   tower:{name:'Tower',radius:3,count:1,color:'#b46bff',opacity:.4},
   boss:{name:'Boss',radius:5,rot:180,color:'#ff3b3b',opacity:.2},
@@ -555,9 +555,9 @@ function tetherSVG(s,live,k){
   let o=`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${s.color}" stroke-opacity="${s.opacity*.35}" stroke-width="${w*3}" stroke-linecap="round"/>`+
     `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${s.color}" stroke-opacity="${s.opacity}" stroke-width="${w}" stroke-linecap="round"${s.dashed?` stroke-dasharray="${w*3} ${w*2.5}"`:''}/>`;
   if(live)o+=`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="transparent" stroke-width="${Math.max(w*3,.9*k)}" pointer-events="stroke"/>`;
-  if(s.showDist!==false){const z=Math.max(.3,s.distSize||1.1),t=d.toFixed(1)+'y',bw=t.length*z*.62+z*.7,bh=z*1.45;
+  if(s.showDist!==false){const z=Math.max(.3,s.distSize||0.8),t=d.toFixed(1)+'y',bw=t.length*z*.62+z*.7,bh=z*1.45;
     o+=`<g transform="translate(${r2((ax+bx)/2)} ${r2((ay+by)/2)})"><rect x="${-bw/2}" y="${-bh/2}" width="${bw}" height="${bh}" rx="${bh/2}" fill="#050a18" fill-opacity=".85" stroke="${s.color}" stroke-width="${z*.08}"/><text font-size="${z}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">${t}</text></g>`;}
-  if(s.label)o+=`<text x="${r2((ax+bx)/2)}" y="${r2((ay+by)/2+(s.distSize||1.1)*1.5)}" font-size="${s.labelSize||1.2}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${(s.labelSize||1.2)*.12}" paint-order="stroke">${esc(s.label)}</text>`;
+  if(s.label)o+=`<text x="${r2((ax+bx)/2)}" y="${r2((ay+by)/2+(s.distSize||0.8)*1.5)}" font-size="${s.labelSize||1.2}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${(s.labelSize||1.2)*.12}" paint-order="stroke">${esc(s.label)}</text>`;
   return o;
 }
 // team jobs: board-wide label -> job map, uploaded icons, and the show-jobs switch
