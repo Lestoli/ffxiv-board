@@ -34,6 +34,7 @@ DONUT = {10}
 CROSS = {11}
 
 COLORS = {"cast": "#ff8a2b", "effect": "#ff3b3b"}
+HIT_RE = __import__("re").compile(r"(\d+)/([^/|,]+)/([A-Z]{3})/(\d+)")
 
 
 def num(v, d=0.0):
@@ -173,9 +174,12 @@ class Board:
         shape = int(num(f[5], 0))
         length, width = num(f[7]), num(f[8])
         x, y, head = num(f[12], self.args.cx), num(f[14], self.args.cy), num(f[15])
-        tail = f[20:]
-        dist = tail[-1] if tail and tail[-1].strip().isdigit() and 1 <= int(tail[-1]) <= 8 else ""
-        hits = ", ".join(p.split("/")[1] if p.count("/") >= 2 else p for p in tail if "/" in p)
+        # players hit: "id/Name/JOB/rank" entries (rank 1 = closest to the source ... 8 = farthest);
+        # the first one listed is the main / intended target
+        hit_list = [{"name": m.group(2), "job": m.group(3), "rank": int(m.group(4))}
+                    for m in HIT_RE.finditer("|".join(f[20:]))]
+        dist = str(hit_list[0]["rank"]) if hit_list else ""
+        hits = ", ".join(f"{h['name']} ({h['job']}) #{h['rank']}" for h in hit_list)
 
         color = COLORS.get(typ, "#ffd43b")
         big = length >= 30
@@ -205,13 +209,16 @@ class Board:
                       ev={"type": typ, "actionId": f[3], "action": name, "shape": shape, "len": r2(length),
                           "wid": r2(width), "src": f[10], "tgt": f[18] if len(f) > 18 else "",
                           "castTime": f[20] if len(f) > 20 and num(f[20]) > 0 else "",
-                          "dist": dist, "hits": hits[:300], "raw": line[:600]})
+                          "dist": dist, "hits": hits[:400], "hitList": hit_list[:8],
+                          "main": hit_list[0]["name"] if hit_list else "", "raw": line[:900]})
         self.q.put(("item", iid, it))
         rel = (unix_ms - self.slide_t0) / 1000
         print(f"  +{rel:6.1f}s {typ:6} {name:28} {it['type']:6} at ({x:.1f}, {y:.1f})")
 
     def handle(self, line):
         line = line.strip().strip("\x00")
+        if "] " in line and "|" in line.split("] ", 1)[1]:   # tolerate log-style prefixes "12:41:21.528 | DBG | [Logger] ..."
+            line = line.split("] ", 1)[1]
         if not line:
             return
         f = line.split("|")

@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v26</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v27</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -389,7 +389,12 @@ function shownFight(){const fs=fightsSorted();if(viewFight!==null&&(viewFight===
 // ---- auto (pull) shapes: shown for a few seconds when they arrive, then hidden unless pinned
 const autoSeen=new Map();let autoInit=false,slidesKnown=null;
 let showSecs=+(lsGet('ffxiv-pull-secs')||4)||4, followPulls=lsGet('ffxiv-pull-follow')!=='0', newestFirst=lsGet('ffxiv-pull-order')!=='old';
-const distOf=it=>{const d=it&&it.ev&&String(it.ev.dist||'').trim();return d==='1'?'near':d==='8'?'far':'';};
+// players hit: parse "id/Name/JOB/rank" from the raw line (fixes pulls recorded by the older relay too)
+const HIT_RE=/(\d+)\/([^\/|,]+)\/([A-Z]{3})\/(\d+)/g;
+function hitsOf(ev){if(!ev)return[];if(Array.isArray(ev.hitList)&&ev.hitList.length)return ev.hitList;if(typeof ev.raw!=='string')return[];
+  const f=ev.raw.split('|');return[...f.slice(20).join('|').matchAll(HIT_RE)].map(m=>({name:m[2],job:m[3],rank:+m[4]}));}
+function rankOf(ev){const h=hitsOf(ev);if(h.length)return String(h[0].rank);return ev&&ev.raw?'':String((ev&&ev.dist)||'');}
+const distOf=it=>{const d=it&&it.ev?rankOf(it.ev).trim():'';return d==='1'?'near':d==='8'?'far':'';};
 const distBadge=(it,long)=>{const k=distOf(it);return k==='near'?`<span class="dbadge near" title="Hit the closest player (#1) — likely a distance bait">${long?'#1 CLOSEST':'#1 near'}</span>`:k==='far'?`<span class="dbadge far" title="Hit the farthest player (#8) — likely a distance bait">${long?'#8 FARTHEST':'#8 far'}</span>`:'';};
 function autoShown(it){if(!it.auto||it.pinned)return true;const t=autoSeen.get(it.id);if(t==null)return false;const d=Date.now()-t;return d>=0&&d<showSecs*1000;}
 let autoWasActive=false;
@@ -1103,7 +1108,8 @@ function buildInsp(){
       ${!['ink','tether'].includes(s.type)?numRow('x','X',.1,r2(A.cx-span),r2(A.cx+span))+numRow('y','Y',.1,r2(A.cy-span),r2(A.cy+span))+numRow('pd','Dist. from ctr',.1,0,A.radius+A.margin)+numRow('pa','Angle from ctr °',1,0,360):''}
       ${!['ink','tether'].includes(s.type)?`<div class="btnrow" style="margin-top:2px"><button data-act="center">Move to center</button>${ROTATABLE.has(s.type)&&!aimed?'<button data-act="faceIn">Face center</button><button data-act="faceOut">Face outward</button>':''}</div>`:''}
       ${s.auto&&s.ev?(()=>{const e=s.ev,t0=pullT0(slideItems(curSlide));const row=(k,v)=>v!==undefined&&v!==''&&v!==null?`<b>${k}</b><span>${esc(v)}</span>`:'';
-        return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time',fmtT((s.at||t0)-t0))}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${e.dist?`<b>Distance rank</b><span>${esc(e.dist)}${distBadge(s,true)}</span>`:''}${row('Hit',e.hits)}</div>
+        return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time',fmtT((s.at||t0)-t0))}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${(()=>{const h=hitsOf(e),r=rankOf(e);return (h.length?`<b>Main target</b><span>${esc(h[0].name)} (${esc(h[0].job)})</span>`:'')+(r?`<b>Distance rank</b><span>${distBadge(s,true)||'#'+esc(r)}</span>`:'')+
+          (h.length>1?`<b>Also hit</b><span>${h.slice(1).map(x=>`${esc(x.name)} (${esc(x.job)}) #${x.rank}`).join('<br>')}</span>`:'');})()}</div>
           <div class="chks">${chk('pinned','Keep showing (pinned)')}</div></div>`;})():''}
       <div class="sect">${f}</div>
       ${s.type==='marker'?`<div class="sect"><h2>Over their head</h2>
