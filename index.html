@@ -47,6 +47,10 @@ main{display:grid;grid-template-columns:52px 176px 1fr 300px;height:calc(100vh -
 .live{display:inline-block;font:700 9.5px Inter;color:#0a1028;background:#ff5a6a;border-radius:4px;padding:1px 4px;margin-left:4px;letter-spacing:.04em}
 .evinfo{display:grid;grid-template-columns:84px 1fr;gap:3px 8px;font-size:12px;margin:4px 0}
 .evinfo b{color:var(--dim);font-weight:500}
+.dbadge{flex:none;display:inline-block;font:700 9.5px Inter;border-radius:4px;padding:1px 5px;margin-left:5px;letter-spacing:.03em;vertical-align:1px;white-space:nowrap}
+.dbadge.near{background:#ffd43b;color:#1a1200}.dbadge.far{background:#c77dff;color:#16052a}
+#layers li.dist-near{box-shadow:inset 3px 0 0 #ffd43b}#layers li.dist-far{box-shadow:inset 3px 0 0 #c77dff}
+.flipbtn{padding:1px 7px;font:500 11px Inter;letter-spacing:0;text-transform:none;margin-left:6px}
 #slideList{flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:8px}
 .sl{position:relative;border:1px solid var(--line);border-radius:8px;padding:5px;cursor:pointer;background:var(--panel)}
 .sl:hover{border-color:#2d5bb0}
@@ -139,7 +143,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v8</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v9</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -318,7 +322,9 @@ let viewFight=null;   // which fight's pulls the list shows (local); null = foll
 function shownFight(){const fs=fightsSorted();if(viewFight!==null&&(viewFight===''||getDoc('fights',viewFight)))return viewFight;const a=activeFight();if(a)return a.id;return '';}
 // ---- auto (pull) shapes: shown for a few seconds when they arrive, then hidden unless pinned
 const autoSeen=new Map();let autoInit=false,slidesKnown=null;
-let showSecs=+(lsGet('ffxiv-pull-secs')||4)||4, followPulls=lsGet('ffxiv-pull-follow')!=='0';
+let showSecs=+(lsGet('ffxiv-pull-secs')||4)||4, followPulls=lsGet('ffxiv-pull-follow')!=='0', newestFirst=lsGet('ffxiv-pull-order')!=='old';
+const distOf=it=>{const d=it&&it.ev&&String(it.ev.dist||'').trim();return d==='1'?'near':d==='8'?'far':'';};
+const distBadge=(it,long)=>{const k=distOf(it);return k==='near'?`<span class="dbadge near" title="Hit the closest player (#1) — likely a distance bait">${long?'#1 CLOSEST':'#1 near'}</span>`:k==='far'?`<span class="dbadge far" title="Hit the farthest player (#8) — likely a distance bait">${long?'#8 FARTHEST':'#8 far'}</span>`:'';};
 function autoShown(it){if(!it.auto||it.pinned)return true;const t=autoSeen.get(it.id);if(t==null)return false;const d=Date.now()-t;return d>=0&&d<showSecs*1000;}
 let autoWasActive=false;
 setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;for(const t of autoSeen.values()){const d=now-t;if(d<lim){act=true;break;}}
@@ -836,10 +842,10 @@ function buildInsp(){
       <div class="btnrow"><button data-act="resetArena">Reset arena look</button></div></div></fieldset>
       ${isPull(sl)?`<div class="sect" data-pb style="margin-top:0;border-top:0;padding-top:0"><h2>Pull playback</h2><p class="note">Attacks from the game show for a few seconds when they arrive, then hide. Click ● in the list to keep one showing, or click its name to flash it.</p>
         <div class="btnrow"><button class="pri" data-act="replay">▶ Replay pull</button><button data-act="stopReplay">■ Stop</button><button data-act="showAll">Show all</button><button data-act="hideAll">Hide all</button></div></div>`:''}
-      <div class="sect"><h2>${isPull(sl)?'Attacks &amp; layers':'Layers'} <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(top = ${isPull(sl)?'latest':'in front'})</span></h2><ul id="layers">${
-        items.length?[...items].reverse().map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
+      <div class="sect"><h2>${isPull(sl)?'Attacks &amp; layers':'Layers'} <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(top = ${isPull(sl)?(newestFirst?'latest':'earliest'):'in front'})</span>${isPull(sl)?`<button class="flipbtn" data-act="flipOrder" title="Flip the timeline order">${newestFirst?'⇅ Oldest first':'⇅ Newest first'}</button>`:''}</h2><ul id="layers">${
+        items.length?(isPull(sl)&&!newestFirst?[...items].sort((a,b)=>((a.at||0)-(b.at||0))||((a.z||0)-(b.z||0))):isPull(sl)?[...items].sort((a,b)=>((b.at||0)-(a.at||0))||((b.z||0)-(a.z||0))):[...items].reverse()).map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
           const t0=pullT0(items),on=s.auto?!!s.pinned:s.visible!==false;
-          return `<li data-lsel="${s.id}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span><span class="ty">${s.auto?fmtT((s.at||t0)-t0):s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'} (or middle-click the row)">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
+          return `<li data-lsel="${s.id}" class="${s.auto&&distOf(s)?'dist-'+distOf(s):''}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span>${s.auto?distBadge(s):''}<span class="ty">${s.auto?fmtT((s.at||t0)-t0):s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'} (or middle-click the row)">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
         :'<li class="note" style="cursor:default">Nothing on this slide yet — pick a tool on the left.</li>'}</ul></div>`;
     if(isPull(sl)){const pb=insp.querySelector('[data-pb]'),ly=insp.querySelector('#layers');if(pb&&ly){const lys=ly.closest('.sect');insp.prepend(lys);insp.prepend(pb);lys.style.marginTop='12px';}}
   } else if(its.length>1){
@@ -858,7 +864,7 @@ function buildInsp(){
       ${!['ink','tether'].includes(s.type)?numRow('x','X',.1,r2(A.cx-span),r2(A.cx+span))+numRow('y','Y',.1,r2(A.cy-span),r2(A.cy+span))+numRow('pd','Dist. from ctr',.1,0,A.radius+A.margin)+numRow('pa','Angle from ctr °',1,0,360):''}
       ${!['ink','tether'].includes(s.type)?`<div class="btnrow" style="margin-top:2px"><button data-act="center">Move to center</button>${ROTATABLE.has(s.type)&&!aimed?'<button data-act="faceIn">Face center</button><button data-act="faceOut">Face outward</button>':''}</div>`:''}
       ${s.auto&&s.ev?(()=>{const e=s.ev,t0=pullT0(slideItems(curSlide));const row=(k,v)=>v!==undefined&&v!==''&&v!==null?`<b>${k}</b><span>${esc(v)}</span>`:'';
-        return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time',fmtT((s.at||t0)-t0))}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${row('Distance rank',e.dist)}${row('Hit',e.hits)}</div>
+        return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time',fmtT((s.at||t0)-t0))}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${e.dist?`<b>Distance rank</b><span>${esc(e.dist)}${distBadge(s,true)}</span>`:''}${row('Hit',e.hits)}</div>
           <div class="chks">${chk('pinned','Keep showing (pinned)')}</div></div>`;})():''}
       <div class="sect">${f}</div>
       ${TARGETABLE.has(s.type)?`<div class="sect"><h2>Target</h2>${refRow('target','Target',s.id)}
@@ -937,6 +943,7 @@ function action(a){
     case'party':{const A=arenaOf(sl),d=Math.min(8,A.radius*.4);let z=newZ();
       [['tank','MT',0],['tank','OT',90],['healer','H1',270],['healer','H2',180],['dps','M1',225],['dps','M2',135],['dps','R1',315],['dps','R2',45]].forEach(([role,t,an])=>{const it=make('marker',{role,text:t,name:t,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
     case'deselect':setSel([]);return;
+    case'flipOrder':newestFirst=!newestFirst;lsSet('ffxiv-pull-order',newestFirst?'new':'old');buildInsp();return;
     case'replay':replayPull();return;case'stopReplay':stopReplay();return;
     case'showAll':slideItems(curSlide).forEach(i=>{if(i.auto&&!i.pinned)patchItem(i.id,{pinned:true});});setTimeout(buildInsp);return;
     case'hideAll':slideItems(curSlide).forEach(i=>{if(i.auto&&i.pinned)patchItem(i.id,{pinned:false});});stopReplay();setTimeout(buildInsp);return;
