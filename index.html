@@ -28,20 +28,29 @@ button:hover{border-color:var(--accent);background:#152452}
 button.pri{background:linear-gradient(180deg,#1b3d7a,#14306a);border-color:#2d5bb0}
 button.danger:hover{border-color:var(--danger);color:#ffb3bb}
 button:disabled{opacity:.4;cursor:default}
-main{display:grid;grid-template-columns:52px 176px 1fr auto;height:calc(100vh - 50px)}
+main{display:grid;grid-template-columns:52px auto 1fr auto;height:calc(100vh - 50px)}
 #tools{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;overflow-y:auto}
 #tools button{width:38px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;border-color:transparent;background:transparent;border-radius:8px;flex:none}
 #tools button:hover{background:#152452}
 #tools button.on{background:#1b3d7a;border-color:#2d5bb0;box-shadow:0 0 10px rgba(95,211,255,.25)}
 #tools svg{width:20px;height:20px}
 #tools .div{width:28px;height:1px;background:var(--line);margin:4px 0;flex:none}
-#slidesPane{background:#0a1229;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
-#slidesPane h2{padding:10px 10px 0}
-#slideList .secHead{display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line);font:600 12px Rajdhani,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#ffb36b}
-#slideList .secHead .sp{flex:1}
-#slideList .secHead button{padding:2px 7px;font:500 11px Inter;letter-spacing:0;text-transform:none}
-#slideList .secOpts{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--dim)}
-#slideList .secOpts input[type=number]{width:52px;padding:2px 4px}
+#leftCols{display:flex;min-height:0}
+#slidesPane,#pullsPane{width:176px;background:#0a1229;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#pullsPane{width:186px;background:#0c1124}
+#leftCols.nopulls #pullsPane{display:none}
+.colHead{padding:10px 10px 0;display:flex;align-items:center;gap:6px}
+.colHead .sp{flex:1}
+.colHead button{padding:1px 7px;font:500 11px Inter;letter-spacing:0;text-transform:none}
+.pullsH{color:#ffb36b}
+#showPulls{display:none}
+#leftCols.nopulls #showPulls{display:inline-block}
+#pullList{flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:8px}
+#pullList .secHead{display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line);font:600 12px Rajdhani,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#ffb36b}
+#pullList .secHead .sp{flex:1}
+#pullList .secHead button{white-space:nowrap;padding:2px 7px;font:500 11px Inter;letter-spacing:0;text-transform:none}
+#pullList .secOpts{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--dim)}
+#pullList .secOpts input[type=number]{width:52px;padding:2px 4px}
 .sl.pull{border-color:#5a3a1c}.sl.pull.on{border-color:#ffb36b;box-shadow:0 0 0 1px #ffb36b,0 0 14px rgba(255,179,107,.25)}
 .sl.pull .num{color:#ffb36b}
 .live{display:inline-block;font:700 9.5px Inter;color:#0a1028;background:#ff5a6a;border-radius:4px;padding:1px 4px;margin-left:4px;letter-spacing:.04em}
@@ -139,7 +148,8 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
   html,body{overflow:auto}
   #tools{grid-row:1}
   .stagewrap{grid-column:2;grid-row:1}
-  #slidesPane{grid-column:1/3;grid-row:2;max-height:none}
+  #leftCols{grid-column:1/3;grid-row:2;flex-direction:column}
+  #slidesPane,#pullsPane{width:auto}
   #slideList{flex-direction:row;overflow-x:auto}
   .sl{width:120px;flex:none}
   aside.right{grid-column:1/3;grid-row:3;border-left:0;flex-direction:column}
@@ -151,7 +161,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v14</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v15</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -162,10 +172,15 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </header>
 <main>
   <div id="tools"></div>
+  <div id="leftCols">
   <div id="slidesPane">
-    <h2>Slides</h2>
+    <h2 class="colHead">Slides<span class="sp"></span><button id="showPulls" title="Show the Pulls column"></button></h2>
     <div id="slideList"></div>
-
+  </div>
+  <div id="pullsPane">
+    <h2 class="colHead pullsH">Pulls<span class="sp"></span><button id="hidePulls" title="Hide the Pulls column">✕</button></h2>
+    <div id="pullList"></div>
+  </div>
   </div>
   <div class="stagewrap" id="wrap">
     <svg id="stage" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -617,11 +632,13 @@ function renderSlides(){
       <div class="dots">${(where[sl.id]||[]).slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('')}</div>
       <div class="cap"><span class="num">${num}</span><span class="tt">${esc(sl.title||'Untitled')}${live?'<span class="live">LIVE</span>':''}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;};
   list.innerHTML=man.map((sl,i)=>card(sl,i+1)).join('')+
-    (canWrite?`<div class="slActs"><button class="pri" data-addslide>+ New slide</button>${readClip('slide')?'<button data-pasteslide>Paste copied slide</button>':''}</div>`:'')+
-    (()=>{const fs=fightsSorted(),sf=shownFight(),act=activeFight(),fp=pullsOf(sf),hasUnsorted=pl.some(x=>!x.fight);
+    (canWrite?`<div class="slActs"><button class="pri" data-addslide>+ New slide</button>${readClip('slide')?'<button data-pasteslide>Paste copied slide</button>':''}</div>`:'');
+  const liveAny=newest&&slideItems(newest.id).some(i=>i.auto&&autoSeen.has(i.id)&&Date.now()-autoSeen.get(i.id)<60000);
+  $('showPulls').innerHTML=`Pulls (${pl.length})${liveAny?' <span class="live">LIVE</span>':''} ›`;
+  $('pullList').innerHTML=(()=>{const fs=fightsSorted(),sf=shownFight(),act=activeFight(),fp=pullsOf(sf),hasUnsorted=pl.some(x=>!x.fight);
       const opts=fs.map(f=>`<option value="${f.id}"${f.id===sf?' selected':''}>${esc(f.name||'Fight')} (${pullsOf(f.id).length})</option>`).join('')+(hasUnsorted||!fs.length?`<option value=""${sf===''?' selected':''}>${fs.length?'Unsorted pulls':'All pulls'} (${pullsOf('').length})</option>`:'');
       const rec=act&&act.id===sf;
-      return `<div class="secHead">Pulls<span class="sp"></span>${canWrite?'<button data-newfight title="Start a new fight — pull numbers restart at #1">+ New fight</button>':''}${canWrite&&fs.length&&sf?`<button data-fightmenu="${sf}" title="Fight options">⋯</button>`:''}</div>
+      return `<div class="secHead" style="margin-top:0;border-top:0;padding-top:0">Fight<span class="sp"></span>${canWrite?'<button data-newfight title="Start a new fight — pull numbers restart at #1">+ New fight</button>':''}${canWrite&&fs.length&&sf?`<button data-fightmenu="${sf}" title="Fight options">⋯</button>`:''}</div>
      <div class="secOpts"><select id="fightSel" style="width:100%">${opts}</select>
        ${fs.length?(rec?'<span style="color:#ff8a8a">● Recording new pulls into this fight</span>':(sf&&canWrite?`<button data-recfight="${sf}" style="padding:3px 8px">Record new pulls into this fight</button>`:'')):'<span>Click “+ New fight” to group pulls by fight.</span>'}
        <label class="chk"><input type="checkbox" id="pFollow" ${followPulls?'checked':''}>Jump to new pulls</label>
@@ -709,24 +726,28 @@ function copySlide(sid){writeClip('slide',{slide:clone(getDoc('slides',sid)),ite
 function writeClip(kind,data){const v={kind,data};clipMem=v;try{localStorage.setItem(CLIPKEY,JSON.stringify(v));}catch(e){}}
 let clipMem=null;function readClip(kind){let v=clipMem;try{const j=JSON.parse(localStorage.getItem(CLIPKEY));if(j)v=j;}catch(e){}return v&&v.kind===kind?v.data:null;}
 $('emptyAdd').onclick=newSlide;
-$('slideList').addEventListener('click',e=>{if(e.target.closest('[data-addslide]')){newSlide();return;}if(e.target.closest('[data-pasteslide]')){const d=readClip('slide');if(d)dupSlide(null,d);}});
-$('slideList').addEventListener('click',e=>{
+let pullsOpen=lsGet('ffxiv-pulls-col')!=='0';
+function setPullsCol(open){pullsOpen=open;lsSet('ffxiv-pulls-col',open?'1':'0');$('leftCols').classList.toggle('nopulls',!open);scheduleRender();}
+$('hidePulls').onclick=()=>setPullsCol(false);$('showPulls').onclick=()=>setPullsCol(true);
+setPullsCol(pullsOpen);
+$('leftCols').addEventListener('click',e=>{if(e.target.closest('[data-addslide]')){newSlide();return;}if(e.target.closest('[data-pasteslide]')){const d=readClip('slide');if(d)dupSlide(null,d);}});
+$('leftCols').addEventListener('click',e=>{
   const m=e.target.closest('[data-more]');
   if(m){e.stopPropagation();slideMenu(m.dataset.more,m.getBoundingClientRect());return;}
   const sl=e.target.closest('[data-slide]');if(sl&&sl.dataset.slide!==curSlide)goSlide(sl.dataset.slide);
 });
-$('slideList').addEventListener('change',e=>{
+$('leftCols').addEventListener('change',e=>{
   if(e.target.id==='pFollow'){followPulls=e.target.checked;lsSet('ffxiv-pull-follow',followPulls?'1':'0');}
   if(e.target.id==='fightSel'){viewFight=e.target.value;renderSlides();const fp=pullsOf(viewFight);if(fp[0]&&isPull(curSlideDoc()))goSlide(fp[0].id);}
   if(e.target.id==='pSecs'){const v=parseFloat(e.target.value);if(v>0){showSecs=v;lsSet('ffxiv-pull-secs',String(v));}}
 });
-$('slideList').addEventListener('click',e=>{
+$('leftCols').addEventListener('click',e=>{
   const nf=e.target.closest('[data-newfight]');if(nf){e.stopPropagation();newFightBox();return;}
   const rf=e.target.closest('[data-recfight]');if(rf){e.stopPropagation();const f=getDoc('fights',rf.dataset.recfight);if(f){edit('fights',f.id,{...clone(f),activeAt:Date.now()});toast(`New pulls will go into ${f.name}`);}return;}
   const fm=e.target.closest('[data-fightmenu]');if(fm){e.stopPropagation();fightMenu(fm.dataset.fightmenu,fm.getBoundingClientRect());return;}
   if(e.target.closest('[data-clearpulls]')){e.stopPropagation();const pl=pullsOf(shownFight());
   confirmBox(`Delete all ${pl.length} pull slide${pl.length===1?'':'s'} in this fight and their attacks for everyone? You can undo with Ctrl+Z.`,'Delete pulls',()=>{pl.forEach(sl=>{edit('slides',sl.id,null);slideItems(sl.id).forEach(it=>edit('items',it.id,null));});if(isPull(curSlideDoc())||!curSlideDoc()){const m=slidesManual();curSlide=null;if(m[0])goSlide(m[0].id);else renderAll();}toast('Pulls cleared');});}},true);
-$('slideList').addEventListener('contextmenu',e=>{const sl=e.target.closest('[data-slide]');if(!sl)return;e.preventDefault();slideMenu(sl.dataset.slide,{left:e.clientX,bottom:e.clientY,right:e.clientX});});
+$('leftCols').addEventListener('contextmenu',e=>{const sl=e.target.closest('[data-slide]');if(!sl)return;e.preventDefault();slideMenu(sl.dataset.slide,{left:e.clientX,bottom:e.clientY,right:e.clientX});});
 function slideMenu(sid,rect){
   closeMenu();const m=document.createElement('div');m.className='menu';m.id='menu';
   const w=canWrite;
