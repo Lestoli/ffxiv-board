@@ -139,7 +139,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v6</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v7</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -280,9 +280,9 @@ function hashCol(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))|0;
 
 // ================= data layer =================
 let store=null, MODE='loading', canWrite=true, myId=null, userNS=null, room=null, dl=null;
-const server={slides:new Map(),items:new Map()};
-const local={slides:new Map(),items:new Map()};
-const loaded={slides:false,items:false};
+const server={slides:new Map(),items:new Map(),fights:new Map()};
+const local={slides:new Map(),items:new Map(),fights:new Map()};
+const loaded={slides:false,items:false,fights:false};
 const KEY='ffxiv-board-v2', CLIPKEY='ffxiv-board-clip';
 
 function remoteStore(db){
@@ -293,9 +293,9 @@ function remoteStore(db){
   };
 }
 function localStore(){
-  let data={slides:{},items:{}};
-  try{const j=JSON.parse(localStorage.getItem(KEY));if(j&&j.slides&&j.items)data=j;}catch(e){}
-  const subs={slides:[],items:[]};
+  let data={slides:{},items:{},fights:{}};
+  try{const j=JSON.parse(localStorage.getItem(KEY));if(j&&j.slides&&j.items)data={fights:{},...j};}catch(e){}
+  const subs={slides:[],items:[],fights:[]};
   const emit=col=>{const docs=Object.entries(data[col]).map(([id,d])=>({id,data:()=>d}));subs[col].forEach(cb=>cb({docs,metadata:{fromCache:false}}));};
   const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){}};
   return {
@@ -311,6 +311,11 @@ const isPull=sl=>!!(sl&&sl.kind==='pull');
 function slidesManual(){return[...allDocs('slides').values()].filter(s=>!isPull(s)).sort((a,b)=>(a.order-b.order)||(a.id<b.id?-1:1));}
 function slidesPulls(){return[...allDocs('slides').values()].filter(isPull).sort((a,b)=>((b.pull||0)-(a.pull||0))||((b.startedAt||0)-(a.startedAt||0)));}
 function slidesSorted(){return[...slidesManual(),...slidesPulls()];}
+function fightsSorted(){return[...allDocs('fights').values()].sort((a,b)=>((a.order||0)-(b.order||0))||((a.createdAt||0)-(b.createdAt||0)));}
+function activeFight(){let best=null;for(const f of allDocs('fights').values())if(!best||(f.activeAt||0)>(best.activeAt||0))best=f;return best;}
+const pullsOf=fid=>slidesPulls().filter(s=>(s.fight||'')===(fid||''));
+let viewFight=null;   // which fight's pulls the list shows (local); null = follow the recording fight
+function shownFight(){const fs=fightsSorted();if(viewFight!==null&&(viewFight===''||getDoc('fights',viewFight)))return viewFight;const a=activeFight();if(a)return a.id;return '';}
 // ---- auto (pull) shapes: shown for a few seconds when they arrive, then hidden unless pinned
 const autoSeen=new Map();let autoInit=false,slidesKnown=null;
 let showSecs=+(lsGet('ffxiv-pull-secs')||4)||4, followPulls=lsGet('ffxiv-pull-follow')!=='0';
@@ -388,7 +393,23 @@ let picking=null, tetherStart=null;
 let peers=[], names={}, following=null;
 let drag=null, preview=null;
 
-function fitView(){const A=arenaOf(curSlideDoc());view={x:A.cx,y:A.cy,h:A.radius+A.margin};}
+function fitView(){const b=arenaBox(arenaOf(curSlideDoc()));view={x:b.cx,y:b.cy,h:b.h};}
+function arenaParts(A){
+  const out=[],R=+A.radius||20;
+  if(A.shape==='circle')out.push({type:'circle',x:A.cx,y:A.cy,r:R});
+  else if(A.shape==='square')out.push({type:'rect',x:A.cx,y:A.cy,w:2*R,h:2*R,rot:0});
+  else if(A.shape==='rect')out.push({type:'rect',x:A.cx,y:A.cy,w:+A.w||40,h:+A.h||30,rot:0});
+  for(const p of(Array.isArray(A.parts)?A.parts:[]))if(p&&typeof p==='object')out.push({type:p.type==='rect'?'rect':'circle',x:+p.x||0,y:+p.y||0,r:+p.r||0,w:+p.w||0,h:+p.h||0,rot:+p.rot||0,cut:!!p.cut});
+  return out;
+}
+function partSVG(p,attrs){if(p.type==='rect'){const w=Math.max(0,p.w),h=Math.max(0,p.h);return `<rect x="${p.x-w/2}" y="${p.y-h/2}" width="${w}" height="${h}"${p.rot?` transform="rotate(${p.rot} ${p.x} ${p.y})"`:''} ${attrs}/>`;}return `<circle cx="${p.x}" cy="${p.y}" r="${Math.max(0,p.r)}" ${attrs}/>`;}
+function arenaBox(A){
+  const ps=arenaParts(A).filter(p=>!p.cut);if(!ps.length)return{cx:A.cx,cy:A.cy,h:(+A.radius||20)+A.margin,in:+A.radius||20};
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const p of ps){if(p.type==='circle'){x0=Math.min(x0,p.x-p.r);x1=Math.max(x1,p.x+p.r);y0=Math.min(y0,p.y-p.r);y1=Math.max(y1,p.y+p.r);}
+    else{const t=p.rot*Math.PI/180,c=Math.abs(Math.cos(t)),s=Math.abs(Math.sin(t)),ex=(p.w*c+p.h*s)/2,ey=(p.w*s+p.h*c)/2;x0=Math.min(x0,p.x-ex);x1=Math.max(x1,p.x+ex);y0=Math.min(y0,p.y-ey);y1=Math.max(y1,p.y+ey);}}
+  const half=Math.max(x1-x0,y1-y0)/2;return{cx:r2((x0+x1)/2),cy:r2((y0+y1)/2),h:half+A.margin,in:half};
+}
 function vk(){return view.h/24;}
 
 // ================= rendering =================
@@ -473,32 +494,36 @@ function itemSVG(s,A,live,isSel){
   const label=(s.label&&AOE.has(s.type))?`<text font-size="${s.labelSize||1.5}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${(s.labelSize||1.5)*.12}" paint-order="stroke">${esc(s.label)}</text>`:'';
   const attrs=live?` data-id="${s.id}" class="it${isSel?' sel':''}"${s.locked?' pointer-events="none"':''}`:'';
   const g=`<g${attrs} transform="translate(${s.x} ${s.y})"><g transform="rotate(${rot})">${shapeBody(s,live)}</g>${label}</g>`;
-  return (AOE.has(s.type)&&A.clip)?`<g clip-path="url(#${A._pre}cl)">${g}</g>`:g;
+  return (AOE.has(s.type)&&A.clip)?`<g mask="url(#${A._pre}cl)">${g}</g>`:g;
 }
 function buildSlideSVG(sl,items,o){
-  const A=arenaOf(sl);A._pre=o.pre;const P=o.pre,R=A.radius,cx=A.cx,cy=A.cy;
-  let s=`<defs><radialGradient id="${P}fg" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${R*1.15}"><stop offset="0" stop-color="${A.floor}"/><stop offset="1" stop-color="${A.floor2}"/></radialGradient>
+  const A=arenaOf(sl);A._pre=o.pre;const P=o.pre,cx=A.cx,cy=A.cy,B=arenaBox(A),R=Math.max(B.in,1);
+  const parts=arenaParts(A),adds=parts.filter(p=>!p.cut),cuts=parts.filter(p=>p.cut);
+  const bx0=B.cx-B.h,by0=B.cy-B.h,bw=2*B.h;
+  let s=`<defs><radialGradient id="${P}fg" gradientUnits="userSpaceOnUse" cx="${B.cx}" cy="${B.cy}" r="${R*1.15}"><stop offset="0" stop-color="${A.floor}"/><stop offset="1" stop-color="${A.floor2}"/></radialGradient>
     <filter id="${P}gl" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.45" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-    <clipPath id="${P}cl">${arenaShape(A,'')}</clipPath></defs>`;
-  s+=o.live?`<rect x="${cx-2000}" y="${cy-2000}" width="4000" height="4000" fill="${A.bg}"/>`:`<rect x="${cx-R-A.margin}" y="${cy-R-A.margin}" width="${2*(R+A.margin)}" height="${2*(R+A.margin)}" fill="${A.bg}"/>`;
-  s+=arenaShape(A,`fill="url(#${P}fg)"`);
+    <mask id="${P}cl" maskUnits="userSpaceOnUse" x="${cx-3000}" y="${cy-3000}" width="6000" height="6000">${adds.map(p=>partSVG(p,'fill="#fff"')).join('')}${cuts.map(p=>partSVG(p,'fill="#000"')).join('')}</mask></defs>`;
+  s+=o.live?`<rect x="${cx-2000}" y="${cy-2000}" width="4000" height="4000" fill="${A.bg}"/>`:`<rect x="${bx0}" y="${by0}" width="${bw}" height="${bw}" fill="${A.bg}"/>`;
+  // edge: thick stroke under the floor fill leaves only the outer outline of the union visible
+  s+=`<g filter="url(#${P}gl)">${adds.map(p=>partSVG(p,`fill="none" stroke="${A.edge}" stroke-width="0.6"`)).join('')}</g>`;
+  s+=adds.map(p=>partSVG(p,`fill="url(#${P}fg)"`)).join('');
+  if(cuts.length)s+=`<g>${cuts.map(p=>partSVG(p,`fill="${A.bg}"`)).join('')}</g><g mask="url(#${P}cl)"><g filter="url(#${P}gl)">${cuts.map(p=>partSVG(p,`fill="none" stroke="${A.edge}" stroke-width="0.6"`)).join('')}</g></g>`;
   let g='';
-  if(A.grid&&A.gridStep>0&&!o.thumb){const st=A.gridStep,n=Math.ceil((R+1)/st);
+  if(A.grid&&A.gridStep>0&&!o.thumb){const st=A.gridStep,n=Math.ceil((B.h+Math.max(Math.abs(B.cx-cx),Math.abs(B.cy-cy))+1)/st);
     for(let i=-n;i<=n;i++){const off=i*st,major=Math.abs(off/5-Math.round(off/5))<1e-6,op=major?.16:.06,sw=major?.07:.04;
-      g+=`<line x1="${cx+off}" y1="${cy-R-1}" x2="${cx+off}" y2="${cy+R+1}" stroke="#bfe6ff" stroke-opacity="${op}" stroke-width="${sw}"/><line x1="${cx-R-1}" y1="${cy+off}" x2="${cx+R+1}" y2="${cy+off}" stroke="#bfe6ff" stroke-opacity="${op}" stroke-width="${sw}"/>`;}}
-  if(A.spokes)for(let k=0;k<8;k++){const t=k*Math.PI/4,L=R*1.5;g+=`<line x1="${cx}" y1="${cy}" x2="${cx+L*Math.sin(t)}" y2="${cy-L*Math.cos(t)}" stroke="#bfe6ff" stroke-opacity="${k%2?.1:.18}" stroke-width="0.07"${k%2?' stroke-dasharray="0.5 0.5"':''}/>`;}
-  if(A.rings)for(let r=5;r<R*(A.shape==='square'?1.42:1)-.01;r+=5)g+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#bfe6ff" stroke-opacity=".14" stroke-width="0.07" stroke-dasharray="0.6 0.4"/>`;
+      g+=`<line x1="${cx+off}" y1="${by0}" x2="${cx+off}" y2="${by0+bw}" stroke="#bfe6ff" stroke-opacity="${op}" stroke-width="${sw}"/><line x1="${bx0}" y1="${cy+off}" x2="${bx0+bw}" y2="${cy+off}" stroke="#bfe6ff" stroke-opacity="${op}" stroke-width="${sw}"/>`;}}
+  if(A.spokes)for(let k=0;k<8;k++){const t=k*Math.PI/4,L=B.h*3;g+=`<line x1="${cx}" y1="${cy}" x2="${cx+L*Math.sin(t)}" y2="${cy-L*Math.cos(t)}" stroke="#bfe6ff" stroke-opacity="${k%2?.1:.18}" stroke-width="0.07"${k%2?' stroke-dasharray="0.5 0.5"':''}/>`;}
+  if(A.rings)for(let r=5;r<(A.shape==='circle'&&!parts.some(p=>p!==parts[0])?R:B.h*2)-.01;r+=5)g+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#bfe6ff" stroke-opacity=".14" stroke-width="0.07" stroke-dasharray="0.6 0.4"/>`;
   g+=`<circle cx="${cx}" cy="${cy}" r="0.25" fill="#bfe6ff" fill-opacity=".5"/>`;
-  s+=`<g clip-path="url(#${P}cl)">${g}</g>`;
-  s+=arenaShape(A,`fill="none" stroke="${A.edge}" stroke-width="0.3" filter="url(#${P}gl)"`);
-  if(A.cardinals){const d=R+A.margin*.5,fs=Math.min(1.8,A.margin*.55);
-    [['N',0,-1],['E',1,0],['S',0,1],['W',-1,0]].forEach(([t,x,y])=>{s+=`<text x="${cx+x*d}" y="${cy+y*d}" font-size="${fs}" font-family="${FONT}" font-weight="700" fill="${A.edge}" fill-opacity=".85" text-anchor="middle" dominant-baseline="central">${t}</text>`;});}
-  if(A.showTitle&&sl&&sl.title&&!o.thumb)s+=`<text x="${cx-R-A.margin+.8}" y="${cy-R-A.margin+.8}" font-size="${Math.min(1.2,A.margin*.32)}" font-family="${FONT}" font-weight="700" fill="#fff" dominant-baseline="hanging">${esc(sl.title)}</text>`;
+  s+=`<g mask="url(#${P}cl)">${g}</g>`;
+  if(A.cardinals){const d=B.in+A.margin*.5,fs=Math.min(1.8,A.margin*.55);
+    [['N',0,-1],['E',1,0],['S',0,1],['W',-1,0]].forEach(([t,x,y])=>{s+=`<text x="${B.cx+x*d}" y="${B.cy+y*d}" font-size="${fs}" font-family="${FONT}" font-weight="700" fill="${A.edge}" fill-opacity=".85" text-anchor="middle" dominant-baseline="central">${t}</text>`;});}
+  if(A.showTitle&&sl&&sl.title&&!o.thumb)s+=`<text x="${bx0+.8}" y="${by0+.8}" font-size="${Math.min(1.2,A.margin*.32)}" font-family="${FONT}" font-weight="700" fill="#fff" dominant-baseline="hanging">${esc(sl.title)}</text>`;
   for(const it of resolveTargets(items)){if(it.visible===false||(it.auto&&!autoShown(it)))continue;s+=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));}
   return s;
 }
-function exportSVG(sl,size){const A=arenaOf(sl),h=A.radius+A.margin;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${A.cx-h} ${A.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'x'+sl.id,thumb:false,live:false})}</svg>`;}
+function exportSVG(sl,size){const B=arenaBox(arenaOf(sl)),h=B.h;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${B.cx-h} ${B.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'x'+sl.id,thumb:false,live:false})}</svg>`;}
 
 // items as displayed (my drag + peers' live drags applied)
 function displayItems(){
@@ -554,7 +579,7 @@ function renderStage(){
       `<g transform="translate(${.75*k} ${1*k})"><rect width="${(nm.length*.5+1)*k*.75}" height="${1.15*k*.75}" rx="${.3*k}" fill="${col}"/><text x="${.5*k*.75}" y="${.6*k*.75}" font-size="${.72*k*.75}" font-family="${FONT}" font-weight="700" fill="#0a1028" dominant-baseline="central">${esc(nm)}</text></g></g>`;
   }
   svg.innerHTML=s+ov;
-  $('zPct').textContent=Math.round((A.radius+A.margin)/view.h*100)+'%';
+  $('zPct').textContent=Math.round(arenaBox(A).h/view.h*100)+'%';
 }
 function inkBBox(it){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of it.pts||[[0,0]]){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1]);}return{x0:x0+it.x,y0:y0+it.y,x1:x1+it.x,y1:y1+it.y};}
 
@@ -564,16 +589,22 @@ function renderSlides(){
   const list=$('slideList'),sls=slidesSorted();
   const where={};for(const p of peers){const s=p.presence&&p.presence.slide;if(s&&!p.isMe)(where[s]=where[s]||[]).push(peerColor(p));}
   const man=slidesManual(),pl=slidesPulls(),newest=pl[0];
-  const card=(sl,num)=>{const A=arenaOf(sl),h=A.radius+A.margin,pull=isPull(sl);
+  const card=(sl,num)=>{const B=arenaBox(arenaOf(sl)),A={cx:B.cx,cy:B.cy},h=B.h,pull=isPull(sl);
     const live=pull&&sl===newest&&slideItems(sl.id).some(i=>i.auto&&autoSeen.has(i.id)&&Date.now()-autoSeen.get(i.id)<60000);
     return `<div class="sl${pull?' pull':''}${sl.id===curSlide?' on':''}" data-slide="${sl.id}"><svg viewBox="${A.cx-h} ${A.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'t'+sl.id,thumb:true,live:false})}</svg>
       <div class="dots">${(where[sl.id]||[]).slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('')}</div>
       <div class="cap"><span class="num">${num}</span><span class="tt">${esc(sl.title||'Untitled')}${live?'<span class="live">LIVE</span>':''}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;};
   list.innerHTML=man.map((sl,i)=>card(sl,i+1)).join('')+
-    `<div class="secHead">Pulls <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(${pl.length})</span><span class="sp"></span>${canWrite&&pl.length?'<button data-clearpulls title="Delete every pull slide">Clear</button>':''}</div>
-     <div class="secOpts"><label class="chk"><input type="checkbox" id="pFollow" ${followPulls?'checked':''}>Jump to new pulls</label>
-       <label>Show attacks for <input type="number" id="pSecs" min="0.5" max="60" step="0.5" value="${showSecs}"> s</label></div>`+
-    (pl.length?pl.map(sl=>card(sl,'#'+(sl.pull||'?'))).join(''):'<div class="note">New pulls appear here automatically while the relay is running.</div>');
+    (()=>{const fs=fightsSorted(),sf=shownFight(),act=activeFight(),fp=pullsOf(sf),hasUnsorted=pl.some(x=>!x.fight);
+      const opts=fs.map(f=>`<option value="${f.id}"${f.id===sf?' selected':''}>${esc(f.name||'Fight')} (${pullsOf(f.id).length})</option>`).join('')+(hasUnsorted||!fs.length?`<option value=""${sf===''?' selected':''}>${fs.length?'Unsorted pulls':'All pulls'} (${pullsOf('').length})</option>`:'');
+      const rec=act&&act.id===sf;
+      return `<div class="secHead">Pulls<span class="sp"></span>${canWrite?'<button data-newfight title="Start a new fight — pull numbers restart at #1">+ New fight</button>':''}${canWrite&&fs.length&&sf?`<button data-fightmenu="${sf}" title="Fight options">⋯</button>`:''}</div>
+     <div class="secOpts"><select id="fightSel" style="width:100%">${opts}</select>
+       ${fs.length?(rec?'<span style="color:#ff8a8a">● Recording new pulls into this fight</span>':(sf&&canWrite?`<button data-recfight="${sf}" style="padding:3px 8px">Record new pulls into this fight</button>`:'')):'<span>Click “+ New fight” to group pulls by fight.</span>'}
+       <label class="chk"><input type="checkbox" id="pFollow" ${followPulls?'checked':''}>Jump to new pulls</label>
+       <label>Show attacks for <input type="number" id="pSecs" min="0.5" max="60" step="0.5" value="${showSecs}"> s</label>
+       ${canWrite&&fp.length?`<button data-clearpulls style="padding:3px 8px">Clear ${fp.length} pull${fp.length===1?'':'s'}</button>`:''}</div>`+
+      (fp.length?fp.map(sl=>card(sl,'#'+(sl.pull||'?'))).join(''):'<div class="note">New pulls appear here automatically while the relay is running.</div>');})();
   $('pasteSlide').disabled=!canWrite||!readClip('slide');
 }
 function renderAll(){renderStage();renderSlides();buildInsp();renderTools();renderAvatars();}
@@ -664,10 +695,15 @@ $('slideList').addEventListener('click',e=>{
 });
 $('slideList').addEventListener('change',e=>{
   if(e.target.id==='pFollow'){followPulls=e.target.checked;lsSet('ffxiv-pull-follow',followPulls?'1':'0');}
+  if(e.target.id==='fightSel'){viewFight=e.target.value;renderSlides();const fp=pullsOf(viewFight);if(fp[0]&&isPull(curSlideDoc()))goSlide(fp[0].id);}
   if(e.target.id==='pSecs'){const v=parseFloat(e.target.value);if(v>0){showSecs=v;lsSet('ffxiv-pull-secs',String(v));}}
 });
-$('slideList').addEventListener('click',e=>{if(e.target.closest('[data-clearpulls]')){e.stopPropagation();const pl=slidesPulls();
-  confirmBox(`Delete all ${pl.length} pull slide${pl.length===1?'':'s'} and their attacks for everyone? You can undo with Ctrl+Z.`,'Delete pulls',()=>{pl.forEach(sl=>{edit('slides',sl.id,null);slideItems(sl.id).forEach(it=>edit('items',it.id,null));});if(isPull(curSlideDoc())||!curSlideDoc()){const m=slidesManual();curSlide=null;if(m[0])goSlide(m[0].id);else renderAll();}toast('Pulls cleared');});}},true);
+$('slideList').addEventListener('click',e=>{
+  const nf=e.target.closest('[data-newfight]');if(nf){e.stopPropagation();newFightBox();return;}
+  const rf=e.target.closest('[data-recfight]');if(rf){e.stopPropagation();const f=getDoc('fights',rf.dataset.recfight);if(f){edit('fights',f.id,{...clone(f),activeAt:Date.now()});toast(`New pulls will go into ${f.name}`);}return;}
+  const fm=e.target.closest('[data-fightmenu]');if(fm){e.stopPropagation();fightMenu(fm.dataset.fightmenu,fm.getBoundingClientRect());return;}
+  if(e.target.closest('[data-clearpulls]')){e.stopPropagation();const pl=pullsOf(shownFight());
+  confirmBox(`Delete all ${pl.length} pull slide${pl.length===1?'':'s'} in this fight and their attacks for everyone? You can undo with Ctrl+Z.`,'Delete pulls',()=>{pl.forEach(sl=>{edit('slides',sl.id,null);slideItems(sl.id).forEach(it=>edit('items',it.id,null));});if(isPull(curSlideDoc())||!curSlideDoc()){const m=slidesManual();curSlide=null;if(m[0])goSlide(m[0].id);else renderAll();}toast('Pulls cleared');});}},true);
 $('slideList').addEventListener('contextmenu',e=>{const sl=e.target.closest('[data-slide]');if(!sl)return;e.preventDefault();slideMenu(sl.dataset.slide,{left:e.clientX,bottom:e.clientY,right:e.clientX});});
 function slideMenu(sid,rect){
   closeMenu();const m=document.createElement('div');m.className='menu';m.id='menu';
@@ -683,6 +719,31 @@ function slideMenu(sid,rect){
       del:()=>confirmBox(`Delete “${esc((getDoc('slides',sid)||{}).title||'this slide')}” for everyone? You can undo with Ctrl+Z.`,'Delete slide',()=>delSlide(sid))})[a.dataset.m]();};
 }
 function closeMenu(){const m=$('menu');if(m)m.remove();}
+function newFightBox(){
+  const n=fightsSorted().length+1,cur=curSlideDoc();
+  openModal(`<h2>New fight</h2><p class="note">Pulls from now on go into this fight, numbered from Pull #1.</p>
+    <div class="row two"><label>Fight name</label><input type="text" id="fnIn" maxlength="40" placeholder="e.g. M5S" value="Fight ${n}"></div>
+    ${cur?`<div class="chks"><label class="chk"><input type="checkbox" id="fnArena" checked>Use the current slide’s arena for its pulls</label></div>`:''}
+    <div class="btnrow"><button class="pri" id="fnOk">Create & record</button><button data-close>Cancel</button></div>`);
+  const ok=()=>{const name=$('fnIn').value.trim().slice(0,40)||`Fight ${n}`,id=uid(),now=Date.now();
+    const f={id,name,order:(fightsSorted().slice(-1)[0]?.order||0)+1,createdAt:now,activeAt:now};
+    if(cur&&$('fnArena')&&$('fnArena').checked)f.arena=clone(arenaOf(cur));
+    if(edit('fights',id,f)){viewFight=id;closeModal();renderSlides();toast(`${name} is recording — start a pull`);}};
+  $('fnOk').onclick=ok;$('fnIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>{$('fnIn').focus();$('fnIn').select();},30);
+}
+function fightMenu(fid,rect){
+  closeMenu();const f=getDoc('fights',fid);if(!f)return;const cur=curSlideDoc();const m=document.createElement('div');m.className='menu';m.id='menu';
+  m.innerHTML=`<button data-m="rename">Rename fight</button>${cur?'<button data-m="arena">Use current slide’s arena for new pulls</button>':''}${f.arena?'<button data-m="applyall">Apply fight arena to all its pulls</button>':''}<button data-m="rec">Record new pulls here</button><hr><button data-m="del" style="color:#ffb3bb">Delete fight & its pulls</button>`;
+  document.body.appendChild(m);const x=Math.min(rect.right+4,innerWidth-250),y=Math.min(rect.bottom,innerHeight-m.offsetHeight-8);m.style.left=x+'px';m.style.top=y+'px';
+  m.onclick=e=>{const a=e.target.closest('[data-m]');if(!a)return;closeMenu();
+    ({rename:()=>{openModal(`<h2>Rename fight</h2><div class="row two"><label>Name</label><input type="text" id="frIn" maxlength="40" value="${esc(f.name||'')}"></div><div class="btnrow"><button class="pri" id="frOk">Save</button><button data-close>Cancel</button></div>`);
+        const ok=()=>{const v=$('frIn').value.trim().slice(0,40);if(v){edit('fights',fid,{...clone(getDoc('fights',fid)),name:v});closeModal();}};$('frOk').onclick=ok;$('frIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>$('frIn').focus(),30);},
+      arena:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),arena:clone(arenaOf(cur))});toast(`New pulls in ${f.name} will use this arena`);},
+      applyall:()=>applyFightArena(fid),
+      rec:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),activeAt:Date.now()});toast(`New pulls will go into ${f.name}`);},
+      del:()=>confirmBox(`Delete “${esc(f.name)}” and its ${pullsOf(fid).length} pulls for everyone? You can undo with Ctrl+Z.`,'Delete fight',()=>{pullsOf(fid).forEach(sl=>{edit('slides',sl.id,null);slideItems(sl.id).forEach(it=>edit('items',it.id,null));});edit('fights',fid,null);viewFight=null;if(!getDoc('slides',curSlide)||isPull(curSlideDoc())&&(curSlideDoc().fight||'')===fid){const m2=slidesManual();curSlide=null;if(m2[0])goSlide(m2[0].id);else renderAll();}renderSlides();})})[a.dataset.m]();};
+}
+function applyFightArena(fid){const f=getDoc('fights',fid);if(!f||!f.arena)return;pullsOf(fid).forEach(sl=>edit('slides',sl.id,{...clone(sl),arena:clone(f.arena)}));toast(`Arena applied to ${pullsOf(fid).length} pulls`);}
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('#menu')&&!e.target.closest('[data-more]'))closeMenu();});
 
 // ================= tools =================
@@ -744,9 +805,10 @@ function refRow(k,l,selfId){return `<div class="row two"><label>${l}</label><div
 function colRow(k,l,attr='data-k'){return `<div class="row two"><label>${l}</label><input type="color" ${attr}="${k}"></div>`;}
 function chk(k,l,attr='data-k'){return `<label class="chk"><input type="checkbox" ${attr}="${k}">${l}</label>`;}
 let inspKey='';
+function arenaKey(){const sl=curSlideDoc();if(!sl)return'';const A=arenaOf(sl);return A.shape+':'+(Array.isArray(A.parts)?A.parts.map(p=>p.type+(p.cut?'c':'')).join(','):'')+':'+(sl.fight||'')+'|';}
 function buildInsp(){
   const insp=$('insp'),sl=curSlideDoc();
-  const its=selItems();inspKey=curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(!sl){insp.innerHTML='<p class="note">No slide selected.</p>';return;}
   const A=arenaOf(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   if(!its.length){
@@ -755,10 +817,18 @@ function buildInsp(){
       <div class="chks">${chk('showTitle','Show title on arena','data-a')}</div>
       <div class="btnrow"><button data-act="waymarks">+ 8 waymarks</button><button data-act="party">+ Party clock spots</button></div>
       <div class="sect"><h2>Arena</h2>
-      ${selRow('shape','Shape',[['circle','Circle'],['square','Square']],'data-a')}
-      ${numRow('radius','Radius (y)',.5,5,50,'data-a')}${numRow('cx','Center X',.5,0,200,'data-a')}${numRow('cy','Center Y',.5,0,200,'data-a')}
+      ${selRow('shape','Shape',[['circle','Circle'],['square','Square'],['rect','Rectangle'],['none','None — pieces only']],'data-a')}
+      ${A.shape==='rect'?numRow('w','Width (y)',.5,2,100,'data-a')+numRow('h','Height (y)',.5,2,100,'data-a'):A.shape==='none'?'':numRow('radius',A.shape==='square'?'Half-width (y)':'Radius (y)',.5,5,50,'data-a')}${numRow('cx','Center X',.5,0,200,'data-a')}${numRow('cy','Center Y',.5,0,200,'data-a')}
       ${numRow('margin','Margin (y)',.5,1,15,'data-a')}${numRow('snap','Snap (y)',.25,0,5,'data-a')}
-      <p class="note">Game coordinates: center (100, 100), +X east, +Y south. 0° = North, clockwise. Snap 0 = free.</p></div>
+      <p class="note">Game coordinates: center (100, 100), +X east, +Y south. 0° = North, clockwise. Snap 0 = free.</p>
+      <h2 style="margin-top:12px">Extra pieces</h2><p class="note">Add circles or rectangles to build any arena shape. Tick “Hole” to cut a piece out (pits, gaps).</p>
+      ${(Array.isArray(A.parts)?A.parts:[]).map((pt,i)=>`<div style="border:1px solid var(--line);border-radius:8px;padding:4px 8px;margin:6px 0">
+        <div style="display:flex;align-items:center;gap:8px"><b style="font-size:12px">${i+1}. ${pt.type==='rect'?'Rectangle':'Circle'}</b><span class="sp" style="flex:1"></span><label class="chk"><input type="checkbox" data-ap="${i}:cut">Hole</label><button class="ib" data-delpart="${i}" title="Remove piece" style="padding:1px 7px">✕</button></div>
+        ${numRow(i+':x','X',.5,0,200,'data-ap')}${numRow(i+':y','Y',.5,0,200,'data-ap')}
+        ${pt.type==='rect'?numRow(i+':w','Width',.5,0,100,'data-ap')+numRow(i+':h','Height',.5,0,100,'data-ap')+numRow(i+':rot','Rotation °',1,-180,180,'data-ap'):numRow(i+':r','Radius',.5,0,60,'data-ap')}</div>`).join('')}
+      <div class="btnrow"><button data-act="addPartCircle">+ Circle piece</button><button data-act="addPartRect">+ Rectangle piece</button></div>
+      <div class="btnrow"><button data-act="copyArena">Copy arena</button>${readClip('arena')?'<button data-act="pasteArena">Paste arena</button>':''}</div>
+      ${isPull(sl)&&sl.fight&&getDoc('fights',sl.fight)?`<div class="btnrow"><button class="pri" data-act="fightArena">Use for new pulls of ${esc(getDoc('fights',sl.fight).name)}</button><button data-act="fightArenaAll">Apply to all its pulls</button></div>`:''}</div>
       <div class="sect"><h2>Guides</h2><div class="chks">${chk('grid','Grid','data-a')}${chk('rings','5y rings','data-a')}${chk('spokes','8-way spokes','data-a')}${chk('cardinals','N/E/S/W','data-a')}${chk('clip','Clip AoEs to arena','data-a')}</div>
       ${numRow('gridStep','Grid step (y)',.5,.5,10,'data-a')}</div>
       <div class="sect"><h2>Colors</h2>${colRow('bg','Background','data-a')}${colRow('floor','Floor center','data-a')}${colRow('floor2','Floor edge','data-a')}${colRow('edge','Arena edge','data-a')}
@@ -803,13 +873,14 @@ function buildInsp(){
 }
 function syncInsp(except,force){
   const insp=$('insp');
-  const its=selItems();const key=curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
-  insp.querySelectorAll('[data-k],[data-a],[data-st]').forEach(el=>{
+  insp.querySelectorAll('[data-k],[data-a],[data-st],[data-ap]').forEach(el=>{
     if(el===except||(el===act&&!force))return;let v;
     if(el.dataset.st)v=sl&&sl[el.dataset.st];
-    else if(el.dataset.a)v=A[el.dataset.a];
+    else if(el.dataset.a)v=A[el.dataset.a]??(el.dataset.a==='w'?40:el.dataset.a==='h'?30:undefined);
+    else if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const pt=(A.parts||[])[+i];v=pt?pt[k]:undefined;}
     else{if(!s)return;const k=el.dataset.k;if(k==='pd'||k==='pa'){const p=polar(s);v=k==='pd'?p.d:p.a;}else v=s[k];if(k==='stroke'&&v===undefined)v=true;if(k==='visible'&&v===undefined)v=true;}
     if(el.type==='checkbox')el.checked=!!v;else{const nv=typeof v==='number'?String(+v.toFixed(2)):(v??'');if(el.value!==nv)el.value=nv;}
   });
@@ -824,6 +895,7 @@ insp.addEventListener('input',e=>{
   const sl=curSlideDoc();if(!sl)return;
   if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:v});scheduleThumbs();return;}
   if(el.dataset.a){edit('slides',sl.id,{...clone(sl),arena:{...arenaOf(sl),[el.dataset.a]:v}});syncInsp(el);return;}
+  if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const ar=arenaOf(sl),parts=clone(ar.parts||[]);if(!parts[+i])return;parts[+i][k]=v;edit('slides',sl.id,{...clone(sl),arena:{...ar,parts}});syncInsp(el);return;}
   const k=el.dataset.k,s=selItems()[0];if(!k||!s)return;
   let patch={[k]:v};
   if(k==='pd'||k==='pa'){const p=polar(s);patch=fromPolar(k==='pd'?v:p.d,k==='pa'?v:p.a);}
@@ -833,7 +905,7 @@ insp.addEventListener('input',e=>{
   if(k==='role'&&s.type==='marker'){}
   patchItem(s.id,patch);syncInsp(el);
 });
-insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.a==='shape'||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
+insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.a==='shape'||e.target.dataset.ap&&e.target.dataset.ap.endsWith(':cut')||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
 insp.addEventListener('focusout',()=>endGesture());
 // middle-click a row in the attack/layer list = same as its show/hide dot
 insp.addEventListener('mousedown',e=>{if(e.button===1&&e.target.closest('[data-lsel]'))e.preventDefault();});
@@ -845,11 +917,19 @@ insp.addEventListener('click',e=>{
   const l=e.target.closest('[data-lock]');if(l){const it=getDoc('items',l.dataset.lock);if(it)patchItem(it.id,{locked:!it.locked});setTimeout(buildInsp);return;}
   const li=e.target.closest('[data-lsel]');if(li){const it=getDoc('items',li.dataset.lsel);if(it&&it.auto)autoSeen.set(it.id,Date.now());setSel([li.dataset.lsel]);return;}
   const pk=e.target.closest('[data-pick]');if(pk&&selIds.length===1){picking={id:selIds[0],field:pk.dataset.pick};renderTools();toast('Click a player or item on the arena (Esc to cancel)');return;}
+  const dp=e.target.closest('[data-delpart]');if(dp){const sl=curSlideDoc();if(!sl)return;const ar=arenaOf(sl),parts=clone(ar.parts||[]);parts.splice(+dp.dataset.delpart,1);edit('slides',sl.id,{...clone(sl),arena:{...ar,parts}});setTimeout(buildInsp);return;}
   const b=e.target.closest('[data-act]');if(b)action(b.dataset.act);
 });
 function action(a){
   const sl=curSlideDoc();const s=selItems()[0];
   switch(a){
+    case'addPartCircle':case'addPartRect':{if(!sl)return;const ar=arenaOf(sl),B=arenaBox(ar),parts=clone(ar.parts||[]);
+      parts.push(a==='addPartRect'?{type:'rect',x:r2(B.cx),y:r2(B.cy+B.in),w:10,h:16,rot:0,cut:false}:{type:'circle',x:r2(B.cx+B.in),y:r2(B.cy),r:8,cut:false});
+      edit('slides',sl.id,{...clone(sl),arena:{...ar,parts}});setTimeout(buildInsp);return;}
+    case'copyArena':if(sl){writeClip('arena',clone(arenaOf(sl)));toast('Arena copied — open another slide and press Paste arena');buildInsp();}return;
+    case'pasteArena':{const ar=readClip('arena');if(sl&&ar){edit('slides',sl.id,{...clone(sl),arena:clone(ar)});fitView();setTimeout(buildInsp);toast('Arena pasted');}return;}
+    case'fightArena':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl))});toast(`New pulls in ${f.name} will use this arena`);}return;}
+    case'fightArenaAll':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl))});applyFightArena(f.id);}return;}
     case'resetArena':if(sl)edit('slides',sl.id,{...clone(sl),arena:{...arenaOf(sl),bg:DEFAULT_ARENA.bg,floor:DEFAULT_ARENA.floor,floor2:DEFAULT_ARENA.floor2,edge:DEFAULT_ARENA.edge}});return;
     case'waymarks':{const A=arenaOf(sl),d=Math.max(2,A.radius-5);slideItems(curSlide).filter(i=>i.type==='waymark').forEach(i=>edit('items',i.id,null));let z=newZ();
       [['A',0],['1',45],['B',90],['2',135],['C',180],['3',225],['D',270],['4',315]].forEach(([m,an])=>{const it=make('waymark',{mark:m,name:'Waymark '+m,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
@@ -1102,13 +1182,13 @@ function onSnap(col){return snap=>{
   server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};return[d.id,{...v,id:d.id}];}));
   if(col==='items'){const now=Date.now();if(autoInit){for(const[id,it]of server.items)if(it.auto&&!prev.has(id)&&!autoSeen.has(id))autoSeen.set(id,now);}autoInit=true;}
   if(col==='slides'){if(slidesKnown&&followPulls&&!drag){const nw=[...server.slides.values()].filter(sl=>isPull(sl)&&!slidesKnown.has(sl.id)).sort((a,b)=>(b.pull||0)-(a.pull||0))[0];
-      if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{goSlide(nw.id);toast(nw.title+' started');});}}
+      if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{viewFight=nw.fight||'';goSlide(nw.id);const f=nw.fight&&getDoc('fights',nw.fight);toast((f?f.name+' — ':'')+nw.title+' started');});}}
     slidesKnown=new Set(server.slides.keys());}
   loaded[col]=true;if(!snap.metadata||!snap.metadata.fromCache)clearTimeout(loadTimer),$('banner').classList.toggle('on',!canWrite&&MODE==='shared');
   if(loaded.slides){$('loading').style.display='none';
     if(!curSlide||!getDoc('slides',curSlide)){const s=slidesSorted();if(s.length){goSlide(s[0].id,true);return;}else if(curSlide){curSlide=null;renderAll();}}
   }
-  if(col==='slides')renderSlides();
+  if(col==='slides'||col==='fights')renderSlides();
   scheduleRender();
 };}
 let loadTimer=null;
@@ -1162,7 +1242,7 @@ async function init(){
   if(MODE==='local'&&store.isEmpty()){seedLocal();}
   loadTimer=setTimeout(()=>{if(MODE==='shared'){const b=$('banner');b.textContent='Can’t reach the shared board yet — showing what’s cached. It will update when the connection returns.';b.classList.add('on');$('loading').style.display='none';}},10000);
   const err=e=>{if(e&&e.code==='revoked'){setReadOnly(true);}else toast('Lost connection to the shared board — reload to reconnect.');};
-  store.sub('slides',onSnap('slides'),err);store.sub('items',onSnap('items'),err);
+  store.sub('fights',onSnap('fights'),err);store.sub('slides',onSnap('slides'),err);store.sub('items',onSnap('items'),err);
   if(!canWrite)setReadOnly(true);
   if(room){
     sendPresence({uid:myId,name:myName||'',color:myColor(),slide:curSlide,sel:[],cursor:null});

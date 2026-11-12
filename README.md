@@ -16,3 +16,8 @@ Add `#b=name` to the URL to open a separate board. Data lives in Firebase Realti
 "Pull #N" slide on every `combat_start`, with a shape for each cast/effect at its in-game position.
 Run it on the PC that sends the lines: double-click `relay/start_relay.bat` (Windows, needs Python 3.8+),
 or `python relay/ffxiv_relay.py --help` for options (`--board`, `--types effect`, `--cone 120`, ...).
+
+### Fights
+On the website use **+ New fight** before starting a new boss: pulls restart at #1 and are grouped under that fight.
+The relay asks the board which fight is recording at every `combat_start`, so you never need to restart it.
+Each fight can store an arena (custom shapes included) that new pulls start with.

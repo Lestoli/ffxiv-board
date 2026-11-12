@@ -58,41 +58,57 @@ class Board:
         self.args = args
         self.base = f"/boards/{args.board}"
         self.q = queue.Queue()
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.pull_n = 0
         self.slide = None
         self.slide_t0 = 0
         self.z = 0
         self.seq = 0
         self.conn = None
+        self.rconn = None   # separate connection for reads (writer thread owns self.conn)
+        self.fight_name = ""
         if not args.dry_run:
-            self.pull_n = self._max_existing_pull()
+            f = self._active_fight()
+            self.fight_name = (f or {}).get("name", "")
+            self.pull_n = self._max_existing_pull((f or {}).get("id", ""))
         threading.Thread(target=self._writer, daemon=True).start()
 
     # ---------- firebase REST ----------
-    def _request(self, method, path, body=None):
+    def _request(self, method, path, body=None, read=False):
+        attr = "rconn" if read else "conn"
         for attempt in range(3):
             try:
-                if self.conn is None:
-                    self.conn = http.client.HTTPSConnection(DB_HOST, timeout=10, context=ssl.create_default_context())
+                if getattr(self, attr) is None:
+                    setattr(self, attr, http.client.HTTPSConnection(DB_HOST, timeout=10, context=ssl.create_default_context()))
+                conn = getattr(self, attr)
                 data = None if body is None else json.dumps(body, separators=(",", ":"))
-                self.conn.request(method, path + ".json", body=data, headers={"Content-Type": "application/json"})
-                r = self.conn.getresponse()
+                conn.request(method, path + ".json", body=data, headers={"Content-Type": "application/json"})
+                r = conn.getresponse()
                 txt = r.read().decode("utf-8", "replace")
                 if r.status >= 400:
                     print(f"  ! Firebase {r.status}: {txt[:200]}")
                     return None
                 return json.loads(txt) if txt else None
             except Exception as e:  # reconnect and retry
-                self.conn = None
+                setattr(self, attr, None)
                 if attempt == 2:
                     print(f"  ! Could not reach the board: {e}")
                 time.sleep(0.4 * (attempt + 1))
         return None
 
-    def _max_existing_pull(self):
-        slides = self._request("GET", self.base + "/slides") or {}
-        return max([int(s.get("pull") or 0) for s in slides.values() if isinstance(s, dict) and s.get("kind") == "pull"] or [0])
+    def _max_existing_pull(self, fight=""):
+        slides = self._request("GET", self.base + "/slides", read=True) or {}
+        return max([int(s.get("pull") or 0) for s in slides.values()
+                    if isinstance(s, dict) and s.get("kind") == "pull" and (s.get("fight") or "") == fight] or [0])
+
+    def _active_fight(self):
+        """The fight picked on the website ("+ New fight" / "Record new pulls here"): newest activeAt wins."""
+        fights = self._request("GET", self.base + "/fights", read=True) or {}
+        best = None
+        for f in fights.values():
+            if isinstance(f, dict) and (best is None or (f.get("activeAt") or 0) > (best.get("activeAt") or 0)):
+                best = f
+        return best
 
     def _writer(self):
         while True:
@@ -132,22 +148,27 @@ class Board:
     # ---------- pulls ----------
     def start_pull(self, unix_ms):
         with self.lock:
-            self.pull_n += 1
+            fight = None if self.args.dry_run else self._active_fight()
+            fid = (fight or {}).get("id", "")
+            self.fight_name = (fight or {}).get("name", "")
+            # numbering restarts for each fight; read from the board so restarting the relay keeps counting
+            self.pull_n = (self.pull_n if self.args.dry_run else self._max_existing_pull(fid)) + 1
+            arena = (fight or {}).get("arena") or dict(DEFAULT_ARENA, cx=self.args.cx, cy=self.args.cy, radius=self.args.radius)
             sid = f"pull-{unix_ms}"
             self.slide, self.slide_t0, self.z = sid, unix_ms, 0
-            slide = {"id": sid, "title": f"Pull #{self.pull_n}", "kind": "pull", "pull": self.pull_n,
-                     "order": self.pull_n, "startedAt": unix_ms, "arena": dict(DEFAULT_ARENA,
-                     cx=self.args.cx, cy=self.args.cy, radius=self.args.radius)}
-        self.q.put(("slide", f"/slides/{sid}", slide))
-        print(f"\n=== Pull #{self.pull_n} started ===")
+            slide = {"id": sid, "title": f"Pull #{self.pull_n}", "kind": "pull", "pull": self.pull_n, "fight": fid,
+                     "order": self.pull_n, "startedAt": unix_ms, "arena": arena}
+            self.q.put(("slide", f"/slides/{sid}", slide))
+        print(f"\n=== {self.fight_name + ' - ' if self.fight_name else ''}Pull #{self.pull_n} started ===")
 
     def attack(self, f, line):
         typ = f[2].strip().lower()
         if typ not in self.args.types:
             return
         unix_ms = int(num(f[1], time.time() * 1000))
-        if self.slide is None:
-            self.start_pull(unix_ms)
+        with self.lock:
+            if self.slide is None:
+                self.start_pull(unix_ms)
         name = f[4].strip() or f"Action {f[3]}"
         shape = int(num(f[5], 0))
         length, width = num(f[7]), num(f[8])
@@ -265,7 +286,8 @@ def main():
 
     print(f"FFXIV board relay listening on {args.host}:{args.port} (UDP, TCP and HTTP)")
     print(f"Board: '{args.board}'  ->  https://lestoli.github.io/ffxiv-board/" + ("" if args.board == "raid" else f"#b={args.board}"))
-    print(f"Shapes from: {', '.join(sorted(args.types))}.  Last pull number on the board: {board.pull_n}")
+    print(f"Shapes from: {', '.join(sorted(args.types))}.")
+    print(f"Recording fight: {board.fight_name or '(none - pulls go to Unsorted; use + New fight on the website)'}  (last pull #{board.pull_n})")
     print("Waiting for combat_start... (Ctrl+C to stop)\n")
     try:
         while True:
