@@ -106,6 +106,8 @@ h2{font:600 13px Rajdhani,sans-serif;letter-spacing:.14em;text-transform:upperca
 .dbrow{display:grid;grid-template-columns:1fr 34px 54px 22px;gap:4px;align-items:center;margin:4px 0}
 .dbrow.anim{grid-template-columns:1fr 30px 46px 46px 22px}
 .kfrow{display:grid;grid-template-columns:54px 1fr 1fr 22px;gap:4px;align-items:center;margin:3px 0}
+main:has(#insp.item) .zoom{right:302px}
+@media (max-width:1000px){main:has(#insp.item) .zoom{right:12px}}
 .zoom{position:absolute;right:12px;bottom:10px;display:flex;gap:4px;align-items:center;background:rgba(7,13,31,.8);border:1px solid var(--line);border-radius:8px;padding:3px}
 .zoom button{padding:3px 8px;border-color:transparent;background:transparent}
 .zoom span{min-width:44px;text-align:center;font-size:11.5px;color:var(--dim)}
@@ -171,7 +173,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v17</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v18</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -231,7 +233,7 @@ const DEFAULT_BOARD = "raid";
 <script>
 // ================= constants =================
 const FONT='Inter, Segoe UI, Arial, sans-serif';
-const ROLE_COL={tank:'#2f6fe0',healer:'#2e9e4f',dps:'#c8343a',other:'#7d7d8a'};
+const ROLE_COL={tank:'#2f6fe0',healer:'#2e9e4f',dps:'#c8343a',support:'#2a8f9e',other:'#7d7d8a'};
 const WM_COL={A:'#ff5a5a',B:'#ffd43b',C:'#4dabff',D:'#c77dff','1':'#ff5a5a','2':'#ffd43b','3':'#4dabff','4':'#c77dff'};
 const SWATCHES=['#ff8a2b','#ff3b3b','#ffd43b','#4dff88','#4dabff','#b46bff','#ff5fd2','#ffffff','#202020'];
 const PEER_COLS=['#ff6b6b','#ffd43b','#4dff88','#4dabff','#c77dff','#ff9f43','#2ee6d6','#ff5fd2'];
@@ -241,6 +243,26 @@ const JOBS=[['PLD','tank','Paladin'],['WAR','tank','Warrior'],['DRK','tank','Dar
   ['BRD','dps','Bard'],['MCH','dps','Machinist'],['DNC','dps','Dancer'],['BLM','dps','Black Mage'],['SMN','dps','Summoner'],['RDM','dps','Red Mage'],['PCT','dps','Pictomancer'],['BLU','dps','Blue Mage']];
 const JOB_ROLE=Object.fromEntries(JOBS.map(j=>[j[0],j[1]]));
 const DEBUFF_PRESETS=[['Spread','#b46bff'],['Stack','#ffd43b'],['Tether','#ff5fd2'],['Doom','#7a1f3d'],['Vuln','#ff8a2b'],['Beacon','#4dabff']];
+// head markers (original artwork, not game icons)
+const HEAD_GROUPS=[['Shapes',[['ps_circle','Circle'],['ps_cross','Cross'],['ps_triangle','Triangle'],['ps_square','Square']]],
+  ['Limit cut',[1,2,3,4,5,6,7,8].map(n=>['lc'+n,'Limit cut '+n])],
+  ['Attack',[1,2,3,4,5,6,7,8].map(n=>['atk'+n,'Attack '+n])],
+  ['Bind',[1,2,3].map(n=>['bind'+n,'Bind '+n])],
+  ['Ignore',[1,2].map(n=>['ign'+n,'Ignore '+n])]];
+const HEAD_LABEL=Object.fromEntries(HEAD_GROUPS.flatMap(g=>g[1]));
+function headGlyph(k,h){ // centred at 0,0, roughly h tall
+  const r=h/2,bg=`<circle r="${r}" fill="#0a1028" fill-opacity=".85"/>`,num=k.replace(/\D/g,''),sw=h*.13;
+  const tx=(c,fs,y=0)=>`<text y="${y}" font-size="${fs}" font-family="${FONT}" font-weight="800" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="${c}" stroke-width="${fs*.1}" paint-order="stroke">${num}</text>`;
+  if(k==='ps_circle')return bg+`<circle r="${r*.62}" fill="none" stroke="#ff4d6d" stroke-width="${sw}"/>`;
+  if(k==='ps_cross')return bg+`<path d="M${-r*.55} ${-r*.55}L${r*.55} ${r*.55}M${r*.55} ${-r*.55}L${-r*.55} ${r*.55}" stroke="#4dabff" stroke-width="${sw}" stroke-linecap="round"/>`;
+  if(k==='ps_triangle')return bg+`<path d="M0 ${-r*.62}L${r*.6} ${r*.45}L${-r*.6} ${r*.45}Z" fill="none" stroke="#4dff88" stroke-width="${sw}" stroke-linejoin="round"/>`;
+  if(k==='ps_square')return bg+`<rect x="${-r*.52}" y="${-r*.52}" width="${r*1.04}" height="${r*1.04}" fill="none" stroke="#ff7ad9" stroke-width="${sw}"/>`;
+  if(k.startsWith('lc'))return `<circle r="${r}" fill="#2a0d3a" stroke="#ff9f43" stroke-width="${sw*.8}"/><circle r="${r*.78}" fill="none" stroke="#c77dff" stroke-width="${sw*.4}" stroke-opacity=".8"/>`+tx('#8a2be2',h*.62);
+  if(k.startsWith('atk'))return `<path d="M0 ${-r}L${r} 0L0 ${r}L${-r} 0Z" fill="#3a0a0a" stroke="#ff4d4d" stroke-width="${sw*.8}" stroke-linejoin="round"/>`+tx('#c00',h*.55);
+  if(k.startsWith('bind'))return `<rect x="${-r}" y="${-r*.8}" width="${2*r}" height="${1.6*r}" rx="${r*.45}" fill="#3a2a05" stroke="#ffb02e" stroke-width="${sw*.8}"/><ellipse cx="${-r*.42}" cy="0" rx="${r*.3}" ry="${r*.2}" fill="none" stroke="#ffb02e" stroke-width="${sw*.4}"/>`+`<text x="${r*.3}" font-size="${h*.55}" font-family="${FONT}" font-weight="800" fill="#fff" text-anchor="middle" dominant-baseline="central">${num}</text>`;
+  if(k.startsWith('ign'))return `<circle r="${r}" fill="#081f3a" stroke="#4dabff" stroke-width="${sw*.8}"/><path d="M${-r*.62} ${r*.62}L${r*.62} ${-r*.62}" stroke="#4dabff" stroke-width="${sw*.5}" stroke-opacity=".7"/>`+tx('#0a4a8a',h*.55);
+  return '';
+}
 const ROSTER_SLOTS=['MT','OT','H1','H2','M1','M2','R1','R2'];
 const AOE=new Set(['circle','donut','rect','cone','cross','star','arrow','tower','boss']);
 const TARGETABLE=new Set(['circle','donut','rect','cone','cross','star','arrow','tower','boss','text']);
@@ -279,7 +301,7 @@ const FIELDS={
   arrow:[N('width','Shaft width',.1,.1,5),N('length','Length',.5,0,50),ROT],
   tower:[N('radius','Radius',.5,0,20),N('count','Soak count',1,0,8)],
   boss:[N('radius','Hitbox radius',.5,0,30),N('rot','Facing °',1,-180,180)],
-  marker:[S('role','Role',[['tank','Tank'],['healer','Healer'],['dps','DPS'],['other','Other']]),T('text','Label'),S('job','Job',[['','From team jobs (by label)'],...JOBS.map(j=>[j[0],j[0]+' — '+j[2]])]),N('size','Size',.1,.3,4)],
+  marker:[S('role','Role',[['tank','Tank'],['healer','Healer'],['support','Support (tank or healer)'],['dps','DPS'],['other','Other']]),T('text','Label'),S('job','Job',[['','From team jobs (by label)'],...JOBS.map(j=>[j[0],j[0]+' — '+j[2]])]),N('size','Size',.1,.3,4)],
   waymark:[S('mark','Mark',['A','B','C','D','1','2','3','4'].map(m=>[m,m])),N('size','Size',.1,.3,5)],
   text:[TA('text','Text'),N('size','Font size',.1,.3,10),ROT,C('boxed','Dark box behind text')],
   ink:[N('width','Thickness',.05,.05,3)],
@@ -377,7 +399,7 @@ function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
 const COORD_MIN=-200,COORD_MAX=400;
 const LIMITS={x:[COORD_MIN,COORD_MAX],y:[COORD_MIN,COORD_MAX],cx:[COORD_MIN,COORD_MAX],cy:[COORD_MIN,COORD_MAX],
   radius:[0,150],r:[0,150],w:[0,200],h:[0,200],width:[0,200],length:[0,200],inner:[0,150],outer:[0,150],
-  trackExtra:[-50,50],start:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
+  trackExtra:[-50,50],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
 function lim(k,v){const L=LIMITS[k];return L&&typeof v==='number'?clamp(v,L[0],L[1]):v;}
 function arenaOf(sl){const A={...DEFAULT_ARENA,...((sl&&sl.arena)||{})};
   for(const k of['cx','cy','margin','gridStep','snap','w','h'])if(typeof A[k]==='number')A[k]=lim(k,A[k]);
@@ -548,19 +570,26 @@ function withKey(d,T,x,y){const keys=clone(d.keys||[]);
   const i=keys.findIndex(k=>Math.abs(k.t-T)<.05);if(i>=0){keys[i].x=x;keys[i].y=y;}else keys.push({t:r2(T),x,y});
   keys.sort((a,b)=>a.t-b.t);const n={...d,keys};if(keys[0])Object.assign(n,{x:keys[0].x,y:keys[0].y});return n;}
 const isAnimSlide=()=>!!(curSlideDoc()&&curSlideDoc().anim);
+function overheadSVG(s){
+  const z=Math.max(.3,+s.size||1),deb=debuffSVG(s);let o=deb?deb.svg:'';
+  let showHead=!!(s.head&&HEAD_LABEL[s.head]);
+  if(showHead&&_animT!==null){const hs=nz(s.headStart),he=nz(s.headEnd);if(hs!==null&&_animT<hs)showHead=false;if(he!==null&&he>0&&_animT>=he)showHead=false;}
+  if(showHead){const h=1.7*z,y=-z-.35*z-(deb?deb.h+.25*z:0)-h/2;o+=`<g transform="translate(0 ${y})" pointer-events="none">${headGlyph(s.head,h)}</g>`;}
+  return o;
+}
 function debuffSVG(s){
-  const list=(Array.isArray(s.debuffs)?s.debuffs:[]).filter(d=>d&&typeof d==='object');if(!list.length)return'';
+  const list=(Array.isArray(s.debuffs)?s.debuffs:[]).filter(d=>d&&typeof d==='object');if(!list.length)return null;
   const z=Math.max(.3,+s.size||1),bw=3*z,bh=1.35*z,gap=.25*z;const shown=[];
   for(const d of list){const dur=+d.dur||0,st=+d.start||0;let rem=null,frac=1;
     if(_animT!==null){if(_animT<st)continue;if(dur>0){rem=dur-(_animT-st);if(rem<=0)continue;frac=rem/dur;}}
     else if(dur>0)rem=dur;
     shown.push({d,rem,frac});}
-  if(!shown.length)return'';
+  if(!shown.length)return null;
   const tot=shown.length*bw+(shown.length-1)*gap,y=-z-bh-.25*z;
-  return `<g pointer-events="none">${shown.map(({d,rem,frac},i)=>{const x=-tot/2+i*(bw+gap),c=/^#[0-9a-f]{6}$/i.test(d.color)?d.color:'#b46bff',t=String(d.text||'').slice(0,6);
+  return {h:bh,svg:`<g pointer-events="none">${shown.map(({d,rem,frac},i)=>{const x=-tot/2+i*(bw+gap),c=/^#[0-9a-f]{6}$/i.test(d.color)?d.color:'#b46bff',t=String(d.text||'').slice(0,6);
     return `<g transform="translate(${x} ${y})"><rect width="${bw}" height="${bh}" rx="${bh*.22}" fill="#0a1028" stroke="${c}" stroke-width="${z*.08}"/>
       <rect x="${z*.08}" y="${bh-z*.2}" width="${(bw-z*.16)*frac}" height="${z*.12}" rx="${z*.05}" fill="${c}"/>
-      <text x="${bw/2}" y="${bh*.42}" font-size="${z*(t.length>4?.5:.6)}" font-family="${FONT}" font-weight="800" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(t)}${rem!==null?`<tspan fill="${c}" dx="${z*.12}">${Math.ceil(rem)}</tspan>`:''}</text></g>`;}).join('')}</g>`;
+      <text x="${bw/2}" y="${bh*.42}" font-size="${z*(t.length>4?.5:.6)}" font-family="${FONT}" font-weight="800" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(t)}${rem!==null?`<tspan fill="${c}" dx="${z*.12}">${Math.ceil(rem)}</tspan>`:''}</text></g>`;}).join('')}</g>`};
 }
 function textBox(s){const lines=String(s.text||'').split('\n');const z=Math.max(.1,s.size);const w=Math.max(...lines.map(l=>l.length),1)*z*.58+z*.8, h=lines.length*z*1.2+z*.5;return{lines,w,h,z};}
 
@@ -585,7 +614,8 @@ function shapeBody(s,live){
         if(typeof ic==='string'&&ic.startsWith('data:image/')){const cid=_svgPre+'j'+s.id,r=z*.9;
           return `<g opacity="${s.opacity}"><circle r="${z}" fill="#0a1028" stroke="${c}" stroke-width="${z*.16}"/><clipPath id="${cid}"><circle r="${r}"/></clipPath><image href="${ic}" x="${-r}" y="${-r}" width="${2*r}" height="${2*r}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${cid})"/></g>`;}
         return `<g opacity="${s.opacity}"><circle r="${z}" fill="#0a1028" stroke="${c}" stroke-width="${z*.18}"/><text font-size="${z*.62}" font-family="${FONT}" font-weight="800" fill="${c}" text-anchor="middle" dominant-baseline="central" style="filter:brightness(1.5)">${job}</text></g>`;}
-      return `<g opacity="${s.opacity}"><circle r="${z}" fill="${c}" stroke="#fff" stroke-width="${z*.12}"/><text font-size="${z*(String(s.text).length>2?.7:.85)}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(s.text)}</text></g>`;}
+      const fillC=s.role==='support'&&!job?`<path d="M0 ${-z}A${z} ${z} 0 0 0 0 ${z}Z" fill="${ROLE_COL.tank}"/><path d="M0 ${-z}A${z} ${z} 0 0 1 0 ${z}Z" fill="${ROLE_COL.healer}"/><circle r="${z}" fill="none"`:`<circle r="${z}" fill="${c}"`;
+      return `<g opacity="${s.opacity}">${fillC} stroke="#fff" stroke-width="${z*.12}"/><text font-size="${z*(String(s.text).length>2?.7:.85)}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(s.text)}</text></g>`;}
     case'waymark':{const z=Math.max(.1,s.size),c=WM_COL[s.mark]||'#fff',num=/\d/.test(s.mark);
       const base=num?`<rect x="${-z}" y="${-z}" width="${2*z}" height="${2*z}" rx="${z*.15}"`:`<circle r="${z}"`;
       return `<g opacity="${s.opacity}">${base} fill="${c}" fill-opacity=".28" stroke="${c}" stroke-width="${z*.14}"/><text font-size="${z*1.15}" font-family="${FONT}" font-weight="700" fill="${c}" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${z*.06}" paint-order="stroke">${esc(s.mark)}</text></g>`;}
@@ -604,7 +634,7 @@ function itemSVG(s,A,live,isSel){
   const rot=ROTATABLE.has(s.type)?(s.rot||0):0;
   const label=(s.label&&AOE.has(s.type))?`<text font-size="${s.labelSize||1.5}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${(s.labelSize||1.5)*.12}" paint-order="stroke">${esc(s.label)}</text>`:'';
   const attrs=live?` data-id="${s.id}" class="it${isSel?' sel':''}"${s.locked?' pointer-events="none"':''}`:'';
-  const g=`<g${attrs} transform="translate(${s.x} ${s.y})"${s._ghost?' opacity=".35"':''}><g transform="rotate(${rot})">${shapeBody(s,live)}</g>${label}${s.type==='marker'&&!s._ghost?debuffSVG(s):''}</g>`;
+  const g=`<g${attrs} transform="translate(${s.x} ${s.y})"${s._ghost?' opacity=".35"':''}><g transform="rotate(${rot})">${shapeBody(s,live)}</g>${label}${s.type==='marker'&&!s._ghost?overheadSVG(s):''}</g>`;
   return (AOE.has(s.type)&&A.clip)?`<g mask="url(#${A._pre}cl)">${g}</g>`:g;
 }
 function buildSlideSVG(sl,items,o){
@@ -969,7 +999,7 @@ function arenaKey(){const sl=curSlideDoc();if(!sl)return'';const A=arenaOf(sl);r
 function buildInsp(){
   const insp=$('insp'),sl=curSlideDoc(),sp=$('slidePane'),ip=$('itemPane');
   const prevSel=buildInsp._sel,spTop=sp.scrollTop,ipTop=ip.scrollTop;buildInsp._sel=selIds.join(',');
-  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(!sl){sp.innerHTML='<p class="note">No slide selected.</p>';ip.innerHTML='';insp.classList.remove('item');return;}
   const A=arenaOf(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   {
@@ -1034,6 +1064,9 @@ function buildInsp(){
         return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time',fmtT((s.at||t0)-t0))}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${e.dist?`<b>Distance rank</b><span>${esc(e.dist)}${distBadge(s,true)}</span>`:''}${row('Hit',e.hits)}</div>
           <div class="chks">${chk('pinned','Keep showing (pinned)')}</div></div>`;})():''}
       <div class="sect">${f}</div>
+      ${s.type==='marker'?`<div class="sect"><h2>Over their head</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:4px"><button data-head="" title="None" style="width:34px;height:34px;padding:0;${!s.head?'outline:2px solid #fff':''}">—</button>${HEAD_GROUPS.map(([g,list])=>list.map(([k,l])=>`<button data-head="${k}" title="${l}" style="width:34px;height:34px;padding:0;${s.head===k?'outline:2px solid #fff;':''}"><svg viewBox="-11 -11 22 22" width="26" height="26">${headGlyph(k,20)}</svg></button>`).join('')).join('')}</div>
+        ${sl.anim&&s.head?numRow('headStart','Shown from (s)',.1,0,animLenOf(sl))+numRow('headEnd','Hidden at (s)',.1,0,animLenOf(sl))+'<p class="note">0 = until the end.</p>':''}</div>`:''}
       ${s.type==='marker'?`<div class="sect"><h2>Debuffs</h2>${(Array.isArray(s.debuffs)?s.debuffs:[]).map((d,i)=>`<div class="dbrow${sl.anim?' anim':''}"><input type="text" data-db="${i}:text" maxlength="6" placeholder="Name"><input type="color" data-db="${i}:color" style="height:24px;padding:1px"><input type="number" data-db="${i}:dur" step="1" min="0" placeholder="secs" title="Timer (seconds, 0 = none)">${sl.anim?`<input type="number" data-db="${i}:start" step=".5" min="0" placeholder="at" title="Applied at (seconds)">`:''}<button class="ib" data-dbdel="${i}" title="Remove">✕</button></div>${sl.anim&&+d.dur>0?`<div style="margin:-2px 0 4px"><button class="ib" data-dbaoe="${i}" style="color:var(--accent)">+ AoE on this player when it runs out</button></div>`:''}`).join('')}
         <div class="btnrow">${DEBUFF_PRESETS.map(([n,c])=>`<button data-dbadd="${n}|${c}" style="padding:2px 7px;border-color:${c}">${n}</button>`).join('')}<button data-dbadd="Debuff|#b46bff" style="padding:2px 7px">+ Other</button></div>
         <p class="note">Shown above the player (max 6 letters). The number is the timer in seconds${sl.anim?' — it counts down during playback, from the “at” time':''}.</p></div>`:''}
@@ -1056,7 +1089,7 @@ function buildInsp(){
 }
 function syncInsp(except,force){
   const insp=$('insp');
-  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
   insp.querySelectorAll('#layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
@@ -1114,6 +1147,7 @@ insp.addEventListener('click',e=>{
   const li=e.target.closest('[data-lsel]');if(li){const it=getDoc('items',li.dataset.lsel);if(it&&it.auto)autoSeen.set(it.id,Date.now());setSel([li.dataset.lsel]);return;}
   const pk=e.target.closest('[data-pick]');if(pk&&selIds.length===1){picking={id:selIds[0],field:pk.dataset.pick};renderTools();toast('Click a player or item on the arena (Esc to cancel)');return;}
   const one=selItems()[0];
+  const hd=e.target.closest('[data-head]');if(hd&&one){patchItem(one.id,{head:hd.dataset.head||null});setTimeout(buildInsp);return;}
   const dba=e.target.closest('[data-dbadd]');if(dba&&one){const[n,c]=dba.dataset.dbadd.split('|');const dbs=clone(one.debuffs||[]);dbs.push({text:n.slice(0,6),color:c,dur:0,start:isAnimSlide()?r2(playT):0});patchItem(one.id,{debuffs:dbs});setTimeout(buildInsp);return;}
   const dbd=e.target.closest('[data-dbdel]');if(dbd&&one){const dbs=clone(one.debuffs||[]);dbs.splice(+dbd.dataset.dbdel,1);patchItem(one.id,{debuffs:dbs});setTimeout(buildInsp);return;}
   const dbo=e.target.closest('[data-dbaoe]');if(dbo&&one){const d=(one.debuffs||[])[+dbo.dataset.dbaoe];if(d){const at=r2((+d.start||0)+(+d.dur||0));
