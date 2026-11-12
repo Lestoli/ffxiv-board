@@ -61,7 +61,7 @@ main{display:grid;grid-template-columns:52px auto 1fr auto;height:calc(100vh - 5
 #layers li.dist-near{box-shadow:inset 3px 0 0 #ffd43b}#layers li.dist-far{box-shadow:inset 3px 0 0 #c77dff}
 .flipbtn{padding:1px 7px;font:500 11px Inter;letter-spacing:0;text-transform:none;margin-left:6px}
 #slideList{flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:8px}
-.sl{position:relative;border:1px solid var(--line);border-radius:8px;padding:5px;cursor:pointer;background:var(--panel)}
+.sl{content-visibility:auto;contain-intrinsic-size:auto 190px;position:relative;border:1px solid var(--line);border-radius:8px;padding:5px;cursor:pointer;background:var(--panel)}
 .sl:hover{border-color:#2d5bb0}
 .sl.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 14px rgba(95,211,255,.2)}
 .sl svg{width:100%;aspect-ratio:1;display:block;border-radius:5px;pointer-events:none}
@@ -173,7 +173,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v18</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v19</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -345,7 +345,12 @@ function hashCol(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))|0;
 // ================= data layer =================
 let store=null, MODE='loading', canWrite=true, myId=null, userNS=null, room=null, dl=null;
 const server={slides:new Map(),items:new Map(),fights:new Map(),meta:new Map()};
-const local={slides:new Map(),items:new Map(),fights:new Map(),meta:new Map()};
+let dataVer=0;
+class VMap extends Map{set(k,v){dataVer++;return super.set(k,v);}delete(k){dataVer++;return super.delete(k);}}
+const local={slides:new VMap(),items:new VMap(),fights:new VMap(),meta:new VMap()};
+// stable per-object serial numbers (cheap "has this changed?" checks for thumbnails)
+const _objSer=new WeakMap();let _serN=0;const ser=o=>{if(!o||typeof o!=='object')return 0;let n=_objSer.get(o);if(!n){n=++_serN;_objSer.set(o,n);}return n;};
+const _wrap=new WeakMap();
 const loaded={slides:false,items:false,fights:false,meta:false};
 const KEY='ffxiv-board-v2', CLIPKEY='ffxiv-board-clip';
 
@@ -370,7 +375,8 @@ function localStore(){
   };
 }
 function getDoc(col,id){const l=local[col];if(l.has(id))return l.get(id);return server[col].get(id)||null;}
-function allDocs(col){const m=new Map(server[col]);for(const[id,d]of local[col]){if(d===null)m.delete(id);else m.set(id,d);}return m;}
+const _allCache={};
+function allDocs(col){const c=_allCache[col];if(c&&c.ver===dataVer)return c.map;const m=new Map(server[col]);for(const[id,d]of local[col]){if(d===null)m.delete(id);else m.set(id,d);}_allCache[col]={ver:dataVer,map:m};return m;}
 const isPull=sl=>!!(sl&&sl.kind==='pull');
 function slidesManual(){return[...allDocs('slides').values()].filter(s=>!isPull(s)).sort((a,b)=>(a.order-b.order)||(a.id<b.id?-1:1));}
 function slidesPulls(){return[...allDocs('slides').values()].filter(isPull).sort((a,b)=>((b.pull||0)-(a.pull||0))||((b.startedAt||0)-(a.startedAt||0)));}
@@ -393,7 +399,8 @@ function replayPull(){const its=slideItems(curSlide).filter(i=>i.auto);if(!its.l
   its.forEach(i=>autoSeen.set(i.id,now+((i.at||t0)-t0)));const dur=(Math.max(...its.map(i=>i.at||0))-t0)/1000;toast(`Replaying pull (${fmtT(dur*1000)})`);scheduleRender();}
 function stopReplay(){slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete(i.id);});scheduleRender();}
 const TIER=t=>t==='waymark'?1:t==='tether'?1.5:(t==='ink'||t==='arrow'||t==='marker'||t==='text')?2:0;
-function slideItems(sid){return[...allDocs('items').values()].filter(i=>i.slide===sid).sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));}
+let _bySlide={ver:-1,map:new Map()};
+function slideItems(sid){if(_bySlide.ver!==dataVer){const m=new Map();for(const it of allDocs('items').values()){let a=m.get(it.slide);if(!a){a=[];m.set(it.slide,a);}a.push(it);}for(const a of m.values())a.sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));_bySlide={ver:dataVer,map:m};}return(_bySlide.map.get(sid)||[]).slice();}
 function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
 // sane limits so a typo (e.g. 800) can't build a gigantic canvas
 const COORD_MIN=-200,COORD_MAX=400;
@@ -635,7 +642,7 @@ function itemSVG(s,A,live,isSel){
   const label=(s.label&&AOE.has(s.type))?`<text font-size="${s.labelSize||1.5}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${(s.labelSize||1.5)*.12}" paint-order="stroke">${esc(s.label)}</text>`:'';
   const attrs=live?` data-id="${s.id}" class="it${isSel?' sel':''}"${s.locked?' pointer-events="none"':''}`:'';
   const g=`<g${attrs} transform="translate(${s.x} ${s.y})"${s._ghost?' opacity=".35"':''}><g transform="rotate(${rot})">${shapeBody(s,live)}</g>${label}${s.type==='marker'&&!s._ghost?overheadSVG(s):''}</g>`;
-  return (AOE.has(s.type)&&A.clip)?`<g mask="url(#${A._pre}cl)">${g}</g>`:g;
+  return g;
 }
 function buildSlideSVG(sl,items,o){
   const A=arenaOf(sl);A._pre=o.pre;const P=o.pre,cx=A.cx,cy=A.cy,B=arenaBox(A),R=Math.max(B.in,1);
@@ -663,7 +670,10 @@ function buildSlideSVG(sl,items,o){
   _svgPre=o.pre;
   const animOn=!!(sl&&sl.anim);_animT=animOn?(o.live?playT:(o.t||0)):null;
   if(animOn&&!o.live)items=animResolve(items,o.t||0,false);
-  for(const it of resolveTargets(items)){if(it.visible===false||(it.auto&&!autoShown(it)))continue;s+=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));}
+  let run='';const flush=()=>{if(run){s+=`<g mask="url(#${P}cl)">${run}</g>`;run='';}};
+  for(const it of resolveTargets(items)){if(it.visible===false||(it.auto&&(o.thumb?!it.pinned:!autoShown(it))))continue;const g=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));
+    if(AOE.has(it.type)&&A.clip)run+=g;else{flush();s+=g;}}
+  flush();
   return s;
 }
 function exportSVG(sl,size){const B=arenaBox(arenaOf(sl)),h=B.h,_t=sl.id===curSlide?playT:0;
@@ -683,7 +693,7 @@ let rq=false;function scheduleRender(){if(rq)return;rq=true;requestAnimationFram
 function renderStage(){
   const svg=$('stage'),sl=curSlideDoc();
   $('empty').classList.toggle('on',MODE!=='loading'&&loaded.slides&&!slidesSorted().length);
-  if(!sl){svg.innerHTML='';return;}
+  if(!sl){svg.innerHTML='';svg._layers=null;return;}
   const A=arenaOf(sl),k=vk();
   svg.setAttribute('viewBox',`${view.x-view.h} ${view.y-view.h} ${2*view.h} ${2*view.h}`);
   svg.classList.toggle('ro',!canWrite);
@@ -723,36 +733,45 @@ function renderStage(){
     ov+=`<g transform="translate(${x} ${y})" pointer-events="none"><g transform="scale(${sc})"><path d="M0 0L0 17L4.5 13L7.5 20L10.5 18.7L7.5 12L13 12Z" fill="${col}" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></g>`+
       `<g transform="translate(${.75*k} ${1*k})"><rect width="${(nm.length*.5+1)*k*.75}" height="${1.15*k*.75}" rx="${.3*k}" fill="${col}"/><text x="${.5*k*.75}" y="${.6*k*.75}" font-size="${.72*k*.75}" font-family="${FONT}" font-weight="700" fill="#0a1028" dominant-baseline="central">${esc(nm)}</text></g></g>`;
   }
-  svg.innerHTML=s+ov;
+  if(!svg._layers){svg.innerHTML='<g id="sBase"></g><g id="sOv"></g>';svg._layers={b:svg.firstChild,o:svg.lastChild,bs:null,os:null};}
+  const L=svg._layers;if(L.bs!==s){L.b.innerHTML=s;L.bs=s;}if(L.os!==ov){L.o.innerHTML=ov;L.os=ov;}
   $('zPct').textContent=Math.round(arenaBox(A).h/view.h*100)+'%';
 }
 function inkBBox(it){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of it.pts||[[0,0]]){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1]);}return{x0:x0+it.x,y0:y0+it.y,x1:x1+it.x,y1:y1+it.y};}
 
 // thumbnails
 let tq=null;function scheduleThumbs(){clearTimeout(tq);tq=setTimeout(renderSlides,220);}
+const _thumbCache=new Map();
+function thumbSVG(sl){const items=slideItems(sl.id);const sig=ser(sl)+'|'+ser(metaDoc('roster'))+'|'+ser(metaDoc('icons'))+'|'+items.map(ser).join(',');
+  const c=_thumbCache.get(sl.id);if(c&&c.sig===sig)return c.svg;const B=arenaBox(arenaOf(sl)),h=B.h;
+  const svg=`<svg viewBox="${B.cx-h} ${B.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,items,{pre:'t'+sl.id,thumb:true,live:false})}</svg>`;_thumbCache.set(sl.id,{sig,svg});return svg;}
+// keep existing DOM nodes when their HTML hasn't changed (no flicker, scroll position stays put)
+function reconcile(box,entries){const old=new Map();for(const el of[...box.children])old.set(el.dataset.rk,el);let prev=null;
+  for(const{key,html}of entries){let el=old.get(key);if(el&&el._html===html)old.delete(key);else{const t=document.createElement('template');t.innerHTML=html.trim();const n=t.content.firstElementChild;n.dataset.rk=key;n._html=html;if(el){el.replaceWith(n);old.delete(key);}el=n;}
+    const want=prev?prev.nextElementSibling:box.firstElementChild;if(want!==el)box.insertBefore(el,want);prev=el;}
+  for(const el of old.values())el.remove();}
 function renderSlides(){
   const list=$('slideList'),sls=slidesSorted();
   const where={};for(const p of peers){const s=p.presence&&p.presence.slide;if(s&&!p.isMe)(where[s]=where[s]||[]).push(peerColor(p));}
   const man=slidesManual(),pl=slidesPulls(),newest=pl[0];
   const card=(sl,num)=>{const B=arenaBox(arenaOf(sl)),A={cx:B.cx,cy:B.cy},h=B.h,pull=isPull(sl);
     const live=pull&&sl===newest&&slideItems(sl.id).some(i=>i.auto&&autoSeen.has(i.id)&&Date.now()-autoSeen.get(i.id)<60000);
-    return `<div class="sl${pull?' pull':''}${sl.id===curSlide?' on':''}" data-slide="${sl.id}"><svg viewBox="${A.cx-h} ${A.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'t'+sl.id,thumb:true,live:false})}</svg>
+    return `<div class="sl${pull?' pull':''}${sl.id===curSlide?' on':''}" data-slide="${sl.id}">${thumbSVG(sl)}
       <div class="dots">${(where[sl.id]||[]).slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('')}</div>
       <div class="cap"><span class="num">${num}</span><span class="tt">${esc(sl.title||'Untitled')}${live?'<span class="live">LIVE</span>':''}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;};
-  list.innerHTML=man.map((sl,i)=>card(sl,i+1)).join('')+
-    (canWrite?`<div class="slActs"><button class="pri" data-addslide>+ New slide</button>${readClip('slide')?'<button data-pasteslide>Paste copied slide</button>':''}</div>`:'');
+  reconcile(list,[...man.map((sl,i)=>({key:sl.id,html:card(sl,i+1)})),...(canWrite?[{key:'acts',html:`<div class="slActs"><button class="pri" data-addslide>+ New slide</button>${readClip('slide')?'<button data-pasteslide>Paste copied slide</button>':''}</div>`}]:[])]);
   const liveAny=newest&&slideItems(newest.id).some(i=>i.auto&&autoSeen.has(i.id)&&Date.now()-autoSeen.get(i.id)<60000);
   $('showPulls').innerHTML=`Pulls (${pl.length})${liveAny?' <span class="live">LIVE</span>':''} ›`;
-  $('pullList').innerHTML=(()=>{const fs=fightsSorted(),sf=shownFight(),act=activeFight(),fp=pullsOf(sf),hasUnsorted=pl.some(x=>!x.fight);
+  reconcile($('pullList'),(()=>{const fs=fightsSorted(),sf=shownFight(),act=activeFight(),fp=pullsOf(sf),hasUnsorted=pl.some(x=>!x.fight);
       const opts=fs.map(f=>`<option value="${f.id}"${f.id===sf?' selected':''}>${esc(f.name||'Fight')} (${pullsOf(f.id).length})</option>`).join('')+(hasUnsorted||!fs.length?`<option value=""${sf===''?' selected':''}>${fs.length?'Unsorted pulls':'All pulls'} (${pullsOf('').length})</option>`:'');
       const rec=act&&act.id===sf;
-      return `<div class="secHead" style="margin-top:0;border-top:0;padding-top:0">Fight<span class="sp"></span>${canWrite?'<button data-newfight title="Start a new fight — pull numbers restart at #1">+ New fight</button>':''}${canWrite&&fs.length&&sf?`<button data-fightmenu="${sf}" title="Fight options">⋯</button>`:''}</div>
+      return [{key:'head',html:`<div><div class="secHead" style="margin-top:0;border-top:0;padding-top:0">Fight<span class="sp"></span>${canWrite?'<button data-newfight title="Start a new fight — pull numbers restart at #1">+ New fight</button>':''}${canWrite&&fs.length&&sf?`<button data-fightmenu="${sf}" title="Fight options">⋯</button>`:''}</div>
      <div class="secOpts"><select id="fightSel" style="width:100%">${opts}</select>
        ${fs.length?(rec?'<span style="color:#ff8a8a">● Recording new pulls into this fight</span>':(sf&&canWrite?`<button data-recfight="${sf}" style="padding:3px 8px">Record new pulls into this fight</button>`:'')):'<span>Click “+ New fight” to group pulls by fight.</span>'}
        <label class="chk"><input type="checkbox" id="pFollow" ${followPulls?'checked':''}>Jump to new pulls</label>
        <label>Show attacks for <input type="number" id="pSecs" min="0.5" max="60" step="0.5" value="${showSecs}"> s</label>
-       ${canWrite&&fp.length?`<button data-clearpulls style="padding:3px 8px">Clear ${fp.length} pull${fp.length===1?'':'s'}</button>`:''}</div>`+
-      (fp.length?fp.map(sl=>card(sl,'#'+(sl.pull||'?'))).join(''):'<div class="note">New pulls appear here automatically while the relay is running.</div>');})();
+       ${canWrite&&fp.length?`<button data-clearpulls style="padding:3px 8px">Clear ${fp.length} pull${fp.length===1?'':'s'}</button>`:''}</div></div>`},
+      ...(fp.length?fp.map(sl=>({key:sl.id,html:card(sl,'#'+(sl.pull||'?'))})):[{key:'empty',html:'<div class="note">New pulls appear here automatically while the relay is running.</div>'}])];})());
 }
 function renderAll(){renderStage();renderSlides();buildInsp();renderTools();renderAvatars();renderTimeline();}
 function renderTimeline(){const el=$('timeline'),sl=curSlideDoc();const on=!!(sl&&sl.anim);el.classList.toggle('on',on);if(!on){playing=false;return;}
@@ -1430,7 +1449,7 @@ function setReadOnly(ro){canWrite=!ro;if(ro){setTool('select');}
   const b=$('banner');b.classList.toggle('on',ro&&MODE==='shared');b.textContent='View only — ask the board owner to share it with you as an Editor to make changes.';renderAll();}
 function onSnap(col){return snap=>{
   const prev=server[col];
-  server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};return[d.id,{...v,id:d.id}];}));
+  server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};let w=_wrap.get(v);if(!w||w.id!==d.id){w={...v,id:d.id};_wrap.set(v,w);}return[d.id,w];}));dataVer++;
   if(col==='items'){const now=Date.now();if(autoInit){for(const[id,it]of server.items)if(it.auto&&!prev.has(id)&&!autoSeen.has(id))autoSeen.set(id,now);}autoInit=true;}
   if(col==='slides'){if(slidesKnown&&followPulls&&!drag){const nw=[...server.slides.values()].filter(sl=>isPull(sl)&&!slidesKnown.has(sl.id)).sort((a,b)=>(b.pull||0)-(a.pull||0))[0];
       if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{viewFight=nw.fight||'';goSlide(nw.id);const f=nw.fight&&getDoc('fights',nw.fight);toast((f?f.name+' — ':'')+nw.title+' started');});}}
@@ -1453,8 +1472,11 @@ function firebaseStore(base){
   return{
     set:(col,id,d)=>base.child(col+'/'+id).set(clone(d)),
     del:(col,id)=>base.child(col+'/'+id).remove(),
-    sub:(col,cb,err)=>{const r=base.child(col);const h=snap=>{const v=snap.val()||{};cb({docs:Object.entries(v).map(([id,d])=>({id,data:()=>d})),metadata:{fromCache:false}});};
-      r.on('value',h,e=>err&&err({code:'unavailable',message:String(e&&e.message)}));return()=>r.off('value',h);},
+    sub:(col,cb,err)=>{const r=base.child(col),cache={};let ready=false,t=null;
+      const emit=()=>{t=null;cb({docs:Object.keys(cache).map(id=>({id,data:()=>cache[id]})),metadata:{fromCache:false}});};
+      const bump=()=>{if(ready&&!t)t=setTimeout(emit,30);};const fail=e=>err&&err({code:'unavailable',message:String(e&&e.message)});
+      r.on('child_added',x=>{cache[x.key]=x.val();bump();},fail);r.on('child_changed',x=>{cache[x.key]=x.val();bump();});r.on('child_removed',x=>{delete cache[x.key];bump();});
+      r.once('value',()=>{ready=true;emit();},fail);return()=>r.off();},
   };
 }
 function firebaseRoom(base,tabKey,uidv){
