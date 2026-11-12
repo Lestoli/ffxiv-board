@@ -173,7 +173,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v19</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v20</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -750,6 +750,8 @@ function reconcile(box,entries){const old=new Map();for(const el of[...box.child
   for(const{key,html}of entries){let el=old.get(key);if(el&&el._html===html)old.delete(key);else{const t=document.createElement('template');t.innerHTML=html.trim();const n=t.content.firstElementChild;n.dataset.rk=key;n._html=html;if(el){el.replaceWith(n);old.delete(key);}el=n;}
     const want=prev?prev.nextElementSibling:box.firstElementChild;if(want!==el)box.insertBefore(el,want);prev=el;}
   for(const el of old.values())el.remove();}
+// bring a slide's card into view in its list (used when jumping to a new pull)
+function revealCard(id){renderSlides();requestAnimationFrame(()=>{const el=document.querySelector(`#leftCols [data-slide="${id}"]`);if(el)el.scrollIntoView({block:'nearest',behavior:'smooth'});});}
 function renderSlides(){
   const list=$('slideList'),sls=slidesSorted();
   const where={};for(const p of peers){const s=p.presence&&p.presence.slide;if(s&&!p.isMe)(where[s]=where[s]||[]).push(peerColor(p));}
@@ -1452,7 +1454,7 @@ function onSnap(col){return snap=>{
   server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};let w=_wrap.get(v);if(!w||w.id!==d.id){w={...v,id:d.id};_wrap.set(v,w);}return[d.id,w];}));dataVer++;
   if(col==='items'){const now=Date.now();if(autoInit){for(const[id,it]of server.items)if(it.auto&&!prev.has(id)&&!autoSeen.has(id))autoSeen.set(id,now);}autoInit=true;}
   if(col==='slides'){if(slidesKnown&&followPulls&&!drag){const nw=[...server.slides.values()].filter(sl=>isPull(sl)&&!slidesKnown.has(sl.id)).sort((a,b)=>(b.pull||0)-(a.pull||0))[0];
-      if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{viewFight=nw.fight||'';goSlide(nw.id);const f=nw.fight&&getDoc('fights',nw.fight);toast((f?f.name+' — ':'')+nw.title+' started');});}}
+      if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{viewFight=nw.fight||'';goSlide(nw.id);revealCard(nw.id);const f=nw.fight&&getDoc('fights',nw.fight);toast((f?f.name+' — ':'')+nw.title+' started');});}}
     slidesKnown=new Set(server.slides.keys());}
   loaded[col]=true;if(!snap.metadata||!snap.metadata.fromCache)clearTimeout(loadTimer),$('banner').classList.toggle('on',!canWrite&&MODE==='shared');
   if(loaded.slides){$('loading').style.display='none';
