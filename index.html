@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v25</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v26</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -294,9 +294,9 @@ const FIELDS={
   circle:[N('radius','Radius',.5,0,50)],
   donut:[N('inner','Inner radius',.5,0,50),N('outer','Outer radius',.5,0,60)],
   rect:[N('width','Width',.5,0,80),N('length','Length',.5,0,80),ROT],
-  cone:[N('radius','Radius',.5,0,60),N('angle','Cone angle °',1,1,360),ROT],
-  cross:[N('width','Arm width',.5,0,40),N('length','Arm length',.5,0,60),ROT],
-  star:[N('width','Arm width',.5,0,40),N('length','Arm length',.5,0,60),ROT],
+  cone:[N('radius','Length',.5,0,60),N('angle','Cone angle °',1,1,360),ROT],
+  cross:[N('width','Width',.5,0,40),N('length','Length',.5,0,60),ROT],
+  star:[N('width','Width',.5,0,40),N('length','Length',.5,0,60),ROT],
   tether:[{k:'a',l:'End 1',t:'ref'},{k:'b',l:'End 2',t:'ref'},N('width','Thickness',.05,.05,2),C('dashed','Dashed line'),C('showDist','Show distance'),N('distSize','Distance text size',.1,.4,4)],
   arrow:[N('width','Shaft width',.1,.1,5),N('length','Length',.5,0,50),ROT],
   tower:[N('radius','Radius',.5,0,20),N('count','Soak count',1,0,8)],
