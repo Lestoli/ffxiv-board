@@ -37,6 +37,16 @@ main{display:grid;grid-template-columns:52px 176px 1fr 300px;height:calc(100vh -
 #tools .div{width:28px;height:1px;background:var(--line);margin:4px 0;flex:none}
 #slidesPane{background:#0a1229;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 #slidesPane h2{padding:10px 10px 0}
+#slideList .secHead{display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line);font:600 12px Rajdhani,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#ffb36b}
+#slideList .secHead .sp{flex:1}
+#slideList .secHead button{padding:2px 7px;font:500 11px Inter;letter-spacing:0;text-transform:none}
+#slideList .secOpts{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--dim)}
+#slideList .secOpts input[type=number]{width:52px;padding:2px 4px}
+.sl.pull{border-color:#5a3a1c}.sl.pull.on{border-color:#ffb36b;box-shadow:0 0 0 1px #ffb36b,0 0 14px rgba(255,179,107,.25)}
+.sl.pull .num{color:#ffb36b}
+.live{display:inline-block;font:700 9.5px Inter;color:#0a1028;background:#ff5a6a;border-radius:4px;padding:1px 4px;margin-left:4px;letter-spacing:.04em}
+.evinfo{display:grid;grid-template-columns:84px 1fr;gap:3px 8px;font-size:12px;margin:4px 0}
+.evinfo b{color:var(--dim);font-weight:500}
 #slideList{flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:8px}
 .sl{position:relative;border:1px solid var(--line);border-radius:8px;padding:5px;cursor:pointer;background:var(--panel)}
 .sl:hover{border-color:#2d5bb0}
@@ -129,7 +139,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v3</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v4</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -297,7 +307,20 @@ function localStore(){
 }
 function getDoc(col,id){const l=local[col];if(l.has(id))return l.get(id);return server[col].get(id)||null;}
 function allDocs(col){const m=new Map(server[col]);for(const[id,d]of local[col]){if(d===null)m.delete(id);else m.set(id,d);}return m;}
-function slidesSorted(){return[...allDocs('slides').values()].sort((a,b)=>(a.order-b.order)||(a.id<b.id?-1:1));}
+const isPull=sl=>!!(sl&&sl.kind==='pull');
+function slidesManual(){return[...allDocs('slides').values()].filter(s=>!isPull(s)).sort((a,b)=>(a.order-b.order)||(a.id<b.id?-1:1));}
+function slidesPulls(){return[...allDocs('slides').values()].filter(isPull).sort((a,b)=>((b.pull||0)-(a.pull||0))||((b.startedAt||0)-(a.startedAt||0)));}
+function slidesSorted(){return[...slidesManual(),...slidesPulls()];}
+// ---- auto (pull) shapes: shown for a few seconds when they arrive, then hidden unless pinned
+const autoSeen=new Map();let autoInit=false,slidesKnown=null;
+let showSecs=+(lsGet('ffxiv-pull-secs')||4)||4, followPulls=lsGet('ffxiv-pull-follow')!=='0';
+function autoShown(it){if(!it.auto||it.pinned)return true;const t=autoSeen.get(it.id);if(t==null)return false;const d=Date.now()-t;return d>=0&&d<showSecs*1000;}
+let autoWasActive=false;
+setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;for(const t of autoSeen.values()){const d=now-t;if(d<lim){act=true;break;}}
+  if(act||autoWasActive){scheduleRender();}autoWasActive=act;},200);
+function replayPull(){const its=slideItems(curSlide).filter(i=>i.auto);if(!its.length)return;const t0=Math.min(...its.map(i=>i.at||0)),now=Date.now()+300;
+  its.forEach(i=>autoSeen.set(i.id,now+((i.at||t0)-t0)));const dur=(Math.max(...its.map(i=>i.at||0))-t0)/1000;toast(`Replaying pull (${dur.toFixed(0)}s)`);scheduleRender();}
+function stopReplay(){slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete(i.id);});scheduleRender();}
 const TIER=t=>t==='waymark'?1:t==='tether'?1.5:(t==='ink'||t==='arrow'||t==='marker'||t==='text')?2:0;
 function slideItems(sid){return[...allDocs('items').values()].filter(i=>i.slide===sid).sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));}
 function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
@@ -471,7 +494,7 @@ function buildSlideSVG(sl,items,o){
   if(A.cardinals){const d=R+A.margin*.5,fs=Math.min(1.8,A.margin*.55);
     [['N',0,-1],['E',1,0],['S',0,1],['W',-1,0]].forEach(([t,x,y])=>{s+=`<text x="${cx+x*d}" y="${cy+y*d}" font-size="${fs}" font-family="${FONT}" font-weight="700" fill="${A.edge}" fill-opacity=".85" text-anchor="middle" dominant-baseline="central">${t}</text>`;});}
   if(A.showTitle&&sl&&sl.title&&!o.thumb)s+=`<text x="${cx-R-A.margin+.8}" y="${cy-R-A.margin+.8}" font-size="${Math.min(1.2,A.margin*.32)}" font-family="${FONT}" font-weight="700" fill="#fff" dominant-baseline="hanging">${esc(sl.title)}</text>`;
-  for(const it of resolveTargets(items)){if(it.visible===false)continue;s+=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));}
+  for(const it of resolveTargets(items)){if(it.visible===false||(it.auto&&!autoShown(it)))continue;s+=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));}
   return s;
 }
 function exportSVG(sl,size){const A=arenaOf(sl),h=A.radius+A.margin;
@@ -540,10 +563,17 @@ let tq=null;function scheduleThumbs(){clearTimeout(tq);tq=setTimeout(renderSlide
 function renderSlides(){
   const list=$('slideList'),sls=slidesSorted();
   const where={};for(const p of peers){const s=p.presence&&p.presence.slide;if(s&&!p.isMe)(where[s]=where[s]||[]).push(peerColor(p));}
-  list.innerHTML=sls.map((sl,i)=>{const A=arenaOf(sl),h=A.radius+A.margin;
-    return `<div class="sl${sl.id===curSlide?' on':''}" data-slide="${sl.id}"><svg viewBox="${A.cx-h} ${A.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'t'+sl.id,thumb:true,live:false})}</svg>
+  const man=slidesManual(),pl=slidesPulls(),newest=pl[0];
+  const card=(sl,num)=>{const A=arenaOf(sl),h=A.radius+A.margin,pull=isPull(sl);
+    const live=pull&&sl===newest&&slideItems(sl.id).some(i=>i.auto&&autoSeen.has(i.id)&&Date.now()-autoSeen.get(i.id)<60000);
+    return `<div class="sl${pull?' pull':''}${sl.id===curSlide?' on':''}" data-slide="${sl.id}"><svg viewBox="${A.cx-h} ${A.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'t'+sl.id,thumb:true,live:false})}</svg>
       <div class="dots">${(where[sl.id]||[]).slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('')}</div>
-      <div class="cap"><span class="num">${i+1}</span><span class="tt">${esc(sl.title||'Untitled')}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;}).join('');
+      <div class="cap"><span class="num">${num}</span><span class="tt">${esc(sl.title||'Untitled')}${live?'<span class="live">LIVE</span>':''}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;};
+  list.innerHTML=man.map((sl,i)=>card(sl,i+1)).join('')+
+    `<div class="secHead">Pulls <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(${pl.length})</span><span class="sp"></span>${canWrite&&pl.length?'<button data-clearpulls title="Delete every pull slide">Clear</button>':''}</div>
+     <div class="secOpts"><label class="chk"><input type="checkbox" id="pFollow" ${followPulls?'checked':''}>Jump to new pulls</label>
+       <label>Show attacks for <input type="number" id="pSecs" min="0.5" max="60" step="0.5" value="${showSecs}"> s</label></div>`+
+    (pl.length?pl.map(sl=>card(sl,'#'+(sl.pull||'?'))).join(''):'<div class="note">New pulls appear here automatically while the relay is running.</div>');
   $('pasteSlide').disabled=!canWrite||!readClip('slide');
 }
 function renderAll(){renderStage();renderSlides();buildInsp();renderTools();renderAvatars();}
@@ -595,16 +625,18 @@ function goSlide(id,fromFollow){
   sendPresence({slide:id,sel:[],view:[view.x,view.y,view.h]});
   renderAll();
 }
-function nextOrder(after){const s=slidesSorted();if(after==null)return s.length?s[s.length-1].order+1:1;const i=s.findIndex(x=>x.id===after);if(i<0)return nextOrder();const a=s[i].order,b=i+1<s.length?s[i+1].order:a+2;return(a+b)/2;}
+function nextOrder(after){const s=slidesManual();if(after==null)return s.length?s[s.length-1].order+1:1;const i=s.findIndex(x=>x.id===after);if(i<0)return nextOrder();const a=s[i].order,b=i+1<s.length?s[i+1].order:a+2;return(a+b)/2;}
 function newSlide(){
   const cur=curSlideDoc();const id=uid();
-  const sl={id,title:'Slide '+(slidesSorted().length+1),order:nextOrder(curSlide),arena:clone(arenaOf(cur))};
+  const sl={id,title:'Slide '+(slidesManual().length+1),order:nextOrder(isPull(cur)?null:curSlide),arena:clone(arenaOf(cur))};
   if(!edit('slides',id,sl))return;goSlide(id);
 }
 function dupSlide(sid,asPaste){
   const src=asPaste||{slide:getDoc('slides',sid),items:slideItems(sid)};if(!src.slide)return;
   const id=uid();
-  if(!edit('slides',id,{...clone(src.slide),id,title:(src.slide.title||'Slide')+(asPaste?'':' (copy)'),order:nextOrder(asPaste?curSlide:sid)}))return;
+  const ns={...clone(src.slide),id,title:(src.slide.title||'Slide')+(asPaste?'':' (copy)')};delete ns.kind;delete ns.pull;delete ns.startedAt;
+  const anchor=asPaste?curSlide:sid;ns.order=nextOrder(isPull(getDoc('slides',anchor))?null:anchor);
+  if(!edit('slides',id,ns))return;
   const map={};src.items.forEach(it=>map[it.id]=uid());
   for(const it of remapRefs(src.items,map,()=>false)){const nid=map[it.id];edit('items',nid,{...it,id:nid,slide:id});}
   goSlide(id);toast(asPaste?'Slide pasted':'Slide duplicated');
@@ -616,7 +648,7 @@ function delSlide(sid){
   toast('Slide deleted — Ctrl+Z to undo');
 }
 function moveSlide(sid,dir){
-  const s=slidesSorted();const i=s.findIndex(x=>x.id===sid),j=i+dir;if(i<0||j<0||j>=s.length)return;
+  const s=isPull(getDoc('slides',sid))?slidesPulls():slidesManual();if(isPull(getDoc('slides',sid)))dir=-dir;const i=s.findIndex(x=>x.id===sid),j=i+dir;if(i<0||j<0||j>=s.length)return;
   const a=s[i],b=s[j];edit('slides',a.id,{...clone(a),order:b.order});edit('slides',b.id,{...clone(b),order:a.order});
   if(a.order===b.order)edit('slides',a.id,{...clone(a),order:b.order+dir*.5});
 }
@@ -630,6 +662,12 @@ $('slideList').addEventListener('click',e=>{
   if(m){e.stopPropagation();slideMenu(m.dataset.more,m.getBoundingClientRect());return;}
   const sl=e.target.closest('[data-slide]');if(sl&&sl.dataset.slide!==curSlide)goSlide(sl.dataset.slide);
 });
+$('slideList').addEventListener('change',e=>{
+  if(e.target.id==='pFollow'){followPulls=e.target.checked;lsSet('ffxiv-pull-follow',followPulls?'1':'0');}
+  if(e.target.id==='pSecs'){const v=parseFloat(e.target.value);if(v>0){showSecs=v;lsSet('ffxiv-pull-secs',String(v));}}
+});
+$('slideList').addEventListener('click',e=>{if(e.target.closest('[data-clearpulls]')){e.stopPropagation();const pl=slidesPulls();
+  confirmBox(`Delete all ${pl.length} pull slide${pl.length===1?'':'s'} and their attacks for everyone? You can undo with Ctrl+Z.`,'Delete pulls',()=>{pl.forEach(sl=>{edit('slides',sl.id,null);slideItems(sl.id).forEach(it=>edit('items',it.id,null));});if(isPull(curSlideDoc())||!curSlideDoc()){const m=slidesManual();curSlide=null;if(m[0])goSlide(m[0].id);else renderAll();}toast('Pulls cleared');});}},true);
 $('slideList').addEventListener('contextmenu',e=>{const sl=e.target.closest('[data-slide]');if(!sl)return;e.preventDefault();slideMenu(sl.dataset.slide,{left:e.clientX,bottom:e.clientY,right:e.clientX});});
 function slideMenu(sid,rect){
   closeMenu();const m=document.createElement('div');m.className='menu';m.id='menu';
@@ -708,7 +746,7 @@ function chk(k,l,attr='data-k'){return `<label class="chk"><input type="checkbox
 let inspKey='';
 function buildInsp(){
   const insp=$('insp'),sl=curSlideDoc();
-  const its=selItems();inspKey=curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):'');
+  const its=selItems();inspKey=curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(!sl){insp.innerHTML='<p class="note">No slide selected.</p>';return;}
   const A=arenaOf(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   if(!its.length){
@@ -725,10 +763,14 @@ function buildInsp(){
       ${numRow('gridStep','Grid step (y)',.5,.5,10,'data-a')}</div>
       <div class="sect"><h2>Colors</h2>${colRow('bg','Background','data-a')}${colRow('floor','Floor center','data-a')}${colRow('floor2','Floor edge','data-a')}${colRow('edge','Arena edge','data-a')}
       <div class="btnrow"><button data-act="resetArena">Reset arena look</button></div></div></fieldset>
-      <div class="sect"><h2>Layers <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(top = in front)</span></h2><ul id="layers">${
+      ${isPull(sl)?`<div class="sect" data-pb style="margin-top:0;border-top:0;padding-top:0"><h2>Pull playback</h2><p class="note">Attacks from the game show for a few seconds when they arrive, then hide. Click ● in the list to keep one showing, or click its name to flash it.</p>
+        <div class="btnrow"><button class="pri" data-act="replay">▶ Replay pull</button><button data-act="stopReplay">■ Stop</button><button data-act="showAll">Show all</button><button data-act="hideAll">Hide all</button></div></div>`:''}
+      <div class="sect"><h2>${isPull(sl)?'Attacks &amp; layers':'Layers'} <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(top = ${isPull(sl)?'latest':'in front'})</span></h2><ul id="layers">${
         items.length?[...items].reverse().map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
-          return `<li data-lsel="${s.id}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span><span class="ty">${s.type}</span>${canWrite?`<button class="ib ${s.visible!==false?'act':''}" data-vis="${s.id}" title="Show/hide">${s.visible!==false?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
+          const t0=pullT0(items),on=s.auto?!!s.pinned:s.visible!==false;
+          return `<li data-lsel="${s.id}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span><span class="ty">${s.auto?'+'+(((s.at||t0)-t0)/1000).toFixed(1)+'s':s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'}">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
         :'<li class="note" style="cursor:default">Nothing on this slide yet — pick a tool on the left.</li>'}</ul></div>`;
+    if(isPull(sl)){const pb=insp.querySelector('[data-pb]'),ly=insp.querySelector('#layers');if(pb&&ly){const lys=ly.closest('.sect');insp.prepend(lys);insp.prepend(pb);lys.style.marginTop='12px';}}
   } else if(its.length>1){
     insp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>${its.length} items selected</h2>
       <div class="row two"><label>Color</label><input type="color" data-multi="color" value="${its[0].color||'#ffffff'}"></div>
@@ -744,6 +786,9 @@ function buildInsp(){
     insp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>${TYPE_LABEL[s.type]}</h2>${txtRow('name','Name')}
       ${!['ink','tether'].includes(s.type)?numRow('x','X',.1,r2(A.cx-span),r2(A.cx+span))+numRow('y','Y',.1,r2(A.cy-span),r2(A.cy+span))+numRow('pd','Dist. from ctr',.1,0,A.radius+A.margin)+numRow('pa','Angle from ctr °',1,0,360):''}
       ${!['ink','tether'].includes(s.type)?`<div class="btnrow" style="margin-top:2px"><button data-act="center">Move to center</button>${ROTATABLE.has(s.type)&&!aimed?'<button data-act="faceIn">Face center</button><button data-act="faceOut">Face outward</button>':''}</div>`:''}
+      ${s.auto&&s.ev?(()=>{const e=s.ev,t0=pullT0(slideItems(curSlide));const row=(k,v)=>v!==undefined&&v!==''&&v!==null?`<b>${k}</b><span>${esc(v)}</span>`:'';
+        return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time','+'+(((s.at||t0)-t0)/1000).toFixed(1)+'s')}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${row('Distance rank',e.dist)}${row('Hit',e.hits)}</div>
+          <div class="chks">${chk('pinned','Keep showing (pinned)')}</div></div>`;})():''}
       <div class="sect">${f}</div>
       ${TARGETABLE.has(s.type)?`<div class="sect"><h2>Target</h2>${refRow('target','Target',s.id)}
         ${s.target?`<div class="chks">${chk('attach','Stick to target’s position')}</div>`:''}
@@ -758,7 +803,7 @@ function buildInsp(){
 }
 function syncInsp(except,force){
   const insp=$('insp');
-  const its=selItems();const key=curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):'');
+  const its=selItems();const key=curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
   insp.querySelectorAll('[data-k],[data-a],[data-st]').forEach(el=>{
@@ -770,6 +815,7 @@ function syncInsp(except,force){
   });
 }
 function readVal(el){if(el.type==='checkbox')return el.checked;if(el.type==='number'||el.type==='range'){const v=parseFloat(el.value);return isNaN(v)?null:v;}return el.value;}
+function pullT0(items){const a=items.filter(i=>i.auto&&i.at).map(i=>i.at);const sl=curSlideDoc();return sl&&sl.startedAt?sl.startedAt:(a.length?Math.min(...a):0);}
 const insp=$('insp');
 insp.addEventListener('input',e=>{
   const el=e.target,v=readVal(el);if(v===null)return;beginGesture();
@@ -790,9 +836,9 @@ insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.a==='shape'|
 insp.addEventListener('focusout',()=>endGesture());
 insp.addEventListener('click',e=>{
   const sw=e.target.closest('[data-sw]');if(sw){selItems().forEach(it=>patchItem(it.id,{color:sw.dataset.sw}));return;}
-  const v=e.target.closest('[data-vis]');if(v){const it=getDoc('items',v.dataset.vis);if(it)patchItem(it.id,{visible:it.visible===false});setTimeout(buildInsp);return;}
+  const v=e.target.closest('[data-vis]');if(v){const it=getDoc('items',v.dataset.vis);if(it){if(it.auto)patchItem(it.id,{pinned:!it.pinned,visible:true});else patchItem(it.id,{visible:it.visible===false});}setTimeout(buildInsp);return;}
   const l=e.target.closest('[data-lock]');if(l){const it=getDoc('items',l.dataset.lock);if(it)patchItem(it.id,{locked:!it.locked});setTimeout(buildInsp);return;}
-  const li=e.target.closest('[data-lsel]');if(li){setSel([li.dataset.lsel]);return;}
+  const li=e.target.closest('[data-lsel]');if(li){const it=getDoc('items',li.dataset.lsel);if(it&&it.auto)autoSeen.set(it.id,Date.now());setSel([li.dataset.lsel]);return;}
   const pk=e.target.closest('[data-pick]');if(pk&&selIds.length===1){picking={id:selIds[0],field:pk.dataset.pick};renderTools();toast('Click a player or item on the arena (Esc to cancel)');return;}
   const b=e.target.closest('[data-act]');if(b)action(b.dataset.act);
 });
@@ -805,6 +851,9 @@ function action(a){
     case'party':{const A=arenaOf(sl),d=Math.min(8,A.radius*.4);let z=newZ();
       [['tank','MT',0],['tank','OT',90],['healer','H1',270],['healer','H2',180],['dps','M1',225],['dps','M2',135],['dps','R1',315],['dps','R2',45]].forEach(([role,t,an])=>{const it=make('marker',{role,text:t,name:t,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
     case'deselect':setSel([]);return;
+    case'replay':replayPull();return;case'stopReplay':stopReplay();return;
+    case'showAll':slideItems(curSlide).forEach(i=>{if(i.auto&&!i.pinned)patchItem(i.id,{pinned:true});});setTimeout(buildInsp);return;
+    case'hideAll':slideItems(curSlide).forEach(i=>{if(i.auto&&i.pinned)patchItem(i.id,{pinned:false});});stopReplay();setTimeout(buildInsp);return;
     case'dup':duplicateSel();return;
     case'copy':copySel();return;
     case'del':deleteSel();return;
@@ -1044,7 +1093,12 @@ $('undo').onclick=undo;$('redo').onclick=redo;
 function setReadOnly(ro){canWrite=!ro;if(ro){setTool('select');}
   const b=$('banner');b.classList.toggle('on',ro&&MODE==='shared');b.textContent='View only — ask the board owner to share it with you as an Editor to make changes.';renderAll();}
 function onSnap(col){return snap=>{
+  const prev=server[col];
   server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};return[d.id,{...v,id:d.id}];}));
+  if(col==='items'){const now=Date.now();if(autoInit){for(const[id,it]of server.items)if(it.auto&&!prev.has(id)&&!autoSeen.has(id))autoSeen.set(id,now);}autoInit=true;}
+  if(col==='slides'){if(slidesKnown&&followPulls&&!drag){const nw=[...server.slides.values()].filter(sl=>isPull(sl)&&!slidesKnown.has(sl.id)).sort((a,b)=>(b.pull||0)-(a.pull||0))[0];
+      if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{goSlide(nw.id);toast(nw.title+' started');});}}
+    slidesKnown=new Set(server.slides.keys());}
   loaded[col]=true;if(!snap.metadata||!snap.metadata.fromCache)clearTimeout(loadTimer),$('banner').classList.toggle('on',!canWrite&&MODE==='shared');
   if(loaded.slides){$('loading').style.display='none';
     if(!curSlide||!getDoc('slides',curSlide)){const s=slidesSorted();if(s.length){goSlide(s[0].id,true);return;}else if(curSlide){curSlide=null;renderAll();}}

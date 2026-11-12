@@ -9,3 +9,10 @@ A live, collaborative raid-mechanics diagrammer. Open the site, type your name, 
 - Export PNG / zip of all slides; JSON backup and import
 
 Add `#b=name` to the URL to open a separate board. Data lives in Firebase Realtime Database (`boards/<name>`).
+
+## Live pulls from the game (relay)
+
+`relay/ffxiv_relay.py` listens on port 49002 (UDP, TCP or HTTP POST) for combat lines and creates a
+"Pull #N" slide on every `combat_start`, with a shape for each cast/effect at its in-game position.
+Run it on the PC that sends the lines: double-click `relay/start_relay.bat` (Windows, needs Python 3.8+),
+or `python relay/ffxiv_relay.py --help` for options (`--board`, `--types effect`, `--cone 120`, ...).
