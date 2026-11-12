@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v24</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v25</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -518,7 +518,7 @@ function armsPoly(n,width,length){
 function resolveTargets(items){
   let by=new Map(items.map(i=>[i.id,i]));
   const ok=t=>t&&t.type!=='tether'&&t.type!=='ink'&&t.visible!==false;
-  items=items.map(it=>{if(it.target&&it.attach){const t=by.get(it.target);if(ok(t)&&t.id!==it.id&&(t.x!==it.x||t.y!==it.y))return{...it,x:t.x,y:t.y};}return it;});
+  items=items.map(it=>{const oid=it.anchorTo||(it.target&&it.attach?it.target:null);if(oid){const t=by.get(oid);if(ok(t)&&t.id!==it.id&&(t.x!==it.x||t.y!==it.y))return{...it,x:t.x,y:t.y,_anchored:true};}return it;});
   by=new Map(items.map(i=>[i.id,i]));
   return items.map(it=>{
     if(it.type==='tether'){const a=by.get(it.a),b=by.get(it.b);if(!ok(a)||!ok(b)||a.id===b.id)return{...it,_dangling:true};
@@ -1007,7 +1007,7 @@ function setSel(ids){selIds=ids;sendPresence({sel:ids.slice(0,40)});buildInsp();
 
 function deleteSel(){const its=selItems();if(!its.length)return;const gone=new Set(its.map(i=>i.id));its.forEach(it=>edit('items',it.id,null));
   slideItems(curSlide).forEach(t=>{if(t.type==='tether'&&!gone.has(t.id)&&(gone.has(t.a)||gone.has(t.b)))edit('items',t.id,null);});setSel([]);toast('Deleted — Ctrl+Z to undo');}
-function remapRefs(list,map,valid){return list.map(it=>{const n={...clone(it)};for(const f of['target','a','b']){if(!n[f])continue;if(map[n[f]])n[f]=map[n[f]];else if(!valid(n[f]))n[f]='';}return n;}).filter(n=>n.type!=='tether'||(n.a&&n.b));}
+function remapRefs(list,map,valid){return list.map(it=>{const n={...clone(it)};for(const f of['target','a','b','anchorTo']){if(!n[f])continue;if(map[n[f]])n[f]=map[n[f]];else if(!valid(n[f]))n[f]='';}return n;}).filter(n=>n.type!=='tether'||(n.a&&n.b));}
 function duplicateSel(){const its=selItems();if(!its.length)return;let z=newZ();const ids=[],map={};its.forEach(it=>map[it.id]=uid());
   for(const it of remapRefs(its,map,id=>!!getDoc('items',id))){const id=map[it.id];ids.push(id);edit('items',id,{...it,id,x:r2(it.x+1),y:r2(it.y+1),z:z++});}setSel(ids);}
 function copySel(){const its=selItems();if(!its.length)return;writeClip('items',clone(its));toast(`Copied ${its.length} item${its.length>1?'s':''}`);}
@@ -1036,7 +1036,7 @@ function arenaKey(){const sl=curSlideDoc();if(!sl)return'';const A=arenaOf(sl);r
 function buildInsp(){
   const insp=$('insp'),sl=curSlideDoc(),sp=$('slidePane'),ip=$('itemPane');
   const prevSel=buildInsp._sel,spTop=sp.scrollTop,ipTop=ip.scrollTop;buildInsp._sel=selIds.join(',');
-  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(!sl){sp.innerHTML='<p class="note">No slide selected.</p>';ip.innerHTML='';insp.classList.remove('item');return;}
   const A=arenaOf(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   {
@@ -1120,7 +1120,7 @@ function buildInsp(){
           return `<h2 style="margin-top:10px">Movement</h2>${ks.length?`<div class="kfrow" style="color:var(--dim);font-size:11px"><span>at (s)</span><span>to X</span><span>to Y</span><span></span></div>${rows}`:'<p class="note">Stays where it is for the whole animation.</p>'}
           <div class="btnrow"><button class="pri" data-act="mvAdd">+ Move at ${fmtT(playT*1000)}</button>${ks.length?'<button data-act="kfClear">Stop moving</button>':''}</div>
           <p class="note">${v>0?`Players start moving at each time and travel at ${v} y/s${v===GAME_RUN_SPEED?' (in-game run speed)':''}, so arrival depends on distance.`:'Each point is reached exactly at its time.'} Click “+ Move”, then click the arena where they go. You can also drag the player while the playhead is past 0. The path shows on the arena while this is selected.</p>`;})():''}</div>`:''}
-      ${TARGETABLE.has(s.type)?`<div class="sect"><h2>Target</h2>${refRow('target','Target',s.id)}
+      ${TARGETABLE.has(s.type)?`<div class="sect"><h2>Target</h2>${refRow('anchorTo','Origin follows',s.id)}${s.anchorTo?'<p class="note">This shape’s X/Y sits on that player — move them to move it.</p>':''}${refRow('target','Target',s.id)}
         ${s.target?`<div class="chks">${chk('attach','Stick to target’s position')}</div>`:''}
         ${aimed&&s.type==='rect'?`<div class="chks">${chk('track','Tracking — length reaches the target')}</div>${tracking?numRow('trackExtra','Extend past target (y)',.5,-20,20)+'<p class="note">Starts at this rectangle’s X/Y and stretches exactly to the target, re-sizing as either moves.</p>':''}`:''}
         ${aimed?numRow('aimOffset','Aim offset °',1,-180,180)+'<p class="note">Rotation follows the target automatically — move the target and this shape re-aims.</p>':s.target&&s.attach?'<p class="note">This shape follows its target around.</p>':`<p class="note">${ROTATABLE.has(s.type)?'Pick a player and this shape will always aim at them.':'Pick a player and tick “stick” to make this shape follow them.'}</p>`}</div>`:''}
@@ -1135,7 +1135,7 @@ function buildInsp(){
 }
 function syncInsp(except,force){
   const insp=$('insp');
-  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
   insp.querySelectorAll('ul.layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
@@ -1292,7 +1292,7 @@ svg.addEventListener('pointerdown',e=>{
     if(addKey){setSel(selIds.includes(it.id)?selIds.filter(x=>x!==it.id):[...selIds,it.id]);drag=null;return;}
     if(!selIds.includes(it.id))setSel([it.id]);
     const dmap=new Map(displayItems().map(i=>[i.id,i]));
-    const start={};selItems().forEach(s=>{if(!s.locked&&s.type!=='tether'&&!(s.target&&s.attach&&getDoc('items',s.target))){const dd=dmap.get(s.id)||s;start[s.id]=[dd.x,dd.y];}});
+    const start={};selItems().forEach(s=>{if(!s.locked&&s.type!=='tether'&&!(s.target&&s.attach&&getDoc('items',s.target))&&!(s.anchorTo&&getDoc('items',s.anchorTo))){const dd=dmap.get(s.id)||s;start[s.id]=[dd.x,dd.y];}});
     const itd=dmap.get(it.id)||it;
     beginGesture();Object.keys(start).forEach(id=>touch('items',id));
     drag={mode:'move',px:pt.x,py:pt.y,start,ax:itd.x,ay:itd.y,moved:false,anim:isAnimSlide()};
