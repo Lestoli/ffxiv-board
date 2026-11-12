@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FFXIV Mechanics Diagrammer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070d1f;--panel:#0d1630;--panel2:#111d3d;--line:#1f2f5c;--text:#dbe6ff;--dim:#7f92bf;--accent:#5fd3ff;--danger:#ff5a6a;--ok:#4dff88}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.35 Inter,system-ui,sans-serif;overflow:hidden}
+header{height:50px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:linear-gradient(90deg,#0b1430,#0a1028)}
+header h1{font:700 19px Rajdhani,sans-serif;letter-spacing:.06em;margin:0 6px 0 0;color:#fff;text-shadow:0 0 12px rgba(95,211,255,.55);white-space:nowrap}
+header h1 span{color:var(--accent)}
+.sp{flex:1}
+.status{font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:20px;padding:3px 10px;white-space:nowrap}
+.status b{font-weight:600}
+.status .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--dim);vertical-align:1px}
+.status.live .dot{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.status.ro .dot{background:#ffd43b}
+#avatars{display:flex;align-items:center}
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11px Inter;color:#fff;border:2px solid #0b1430;margin-left:-6px;cursor:pointer;position:relative}
+.av.me{cursor:pointer}
+.av.following{outline:2px solid #fff;outline-offset:1px}
+button{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer;transition:border-color .15s,background .15s}
+button:hover{border-color:var(--accent);background:#152452}
+button.pri{background:linear-gradient(180deg,#1b3d7a,#14306a);border-color:#2d5bb0}
+button.danger:hover{border-color:var(--danger);color:#ffb3bb}
+button:disabled{opacity:.4;cursor:default}
+main{display:grid;grid-template-columns:52px 176px 1fr 300px;height:calc(100vh - 50px)}
+#tools{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;overflow-y:auto}
+#tools button{width:38px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;border-color:transparent;background:transparent;border-radius:8px;flex:none}
+#tools button:hover{background:#152452}
+#tools button.on{background:#1b3d7a;border-color:#2d5bb0;box-shadow:0 0 10px rgba(95,211,255,.25)}
+#tools svg{width:20px;height:20px}
+#tools .div{width:28px;height:1px;background:var(--line);margin:4px 0;flex:none}
+#slidesPane{background:#0a1229;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#slidesPane h2{padding:10px 10px 0}
+#slideList{flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:8px}
+.sl{position:relative;border:1px solid var(--line);border-radius:8px;padding:5px;cursor:pointer;background:var(--panel)}
+.sl:hover{border-color:#2d5bb0}
+.sl.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 14px rgba(95,211,255,.2)}
+.sl svg{width:100%;aspect-ratio:1;display:block;border-radius:5px;pointer-events:none}
+.sl .cap{display:flex;align-items:center;gap:5px;margin-top:4px;font-size:11.5px}
+.sl .num{color:var(--dim);font-weight:600}
+.sl .tt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl .more{padding:0 6px;font-size:14px;line-height:18px;background:transparent;border-color:transparent}
+.sl .dots{position:absolute;top:9px;right:9px;display:flex;gap:2px}
+.sl .dots i{width:9px;height:9px;border-radius:50%;border:1.5px solid #0b1430}
+.slActs{padding:8px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.menu{position:fixed;z-index:40;background:var(--panel);border:1px solid #2d5bb0;border-radius:9px;padding:4px;min-width:170px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:7px 10px;border-radius:6px}
+.menu button:hover{background:#16295a}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+aside.right{background:var(--panel);overflow-y:auto;padding:12px;border-left:1px solid var(--line)}
+h2{font:600 13px Rajdhani,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:4px 0 8px}
+.stagewrap{position:relative;min-width:0;min-height:0;overflow:hidden;background:radial-gradient(circle at 50% 45%,#0e1a3d 0,#070d1f 70%)}
+#stage{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;display:block}
+#stage .it{cursor:move}
+#stage.t-pen,#stage.t-pen .it,#stage.t-arrowd,#stage.t-arrowd .it,#stage.t-stamp,#stage.t-stamp .it{cursor:crosshair}
+#stage.t-text,#stage.t-text .it{cursor:text}
+#stage.t-tether,#stage.t-pick{cursor:crosshair}
+#stage.t-tether .it,#stage.t-pick .it{cursor:pointer}
+#stage.t-eraser,#stage.t-eraser .it{cursor:cell}
+#stage.t-hand,#stage.t-hand .it,#stage.panning,#stage.panning .it{cursor:grab}
+#stage [data-handle]{cursor:grab}
+#stage.ro .it{cursor:default}
+.readout{position:absolute;left:12px;bottom:10px;font:500 11.5px/1.4 ui-monospace,Menlo,monospace;color:var(--dim);background:rgba(7,13,31,.8);padding:4px 8px;border-radius:6px;border:1px solid var(--line);pointer-events:none}
+.zoom{position:absolute;right:12px;bottom:10px;display:flex;gap:4px;align-items:center;background:rgba(7,13,31,.8);border:1px solid var(--line);border-radius:8px;padding:3px}
+.zoom button{padding:3px 8px;border-color:transparent;background:transparent}
+.zoom span{min-width:44px;text-align:center;font-size:11.5px;color:var(--dim)}
+#toolopts{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:10px;background:rgba(13,22,48,.95);border:1px solid #2d5bb0;border-radius:10px;padding:6px 10px;box-shadow:0 6px 24px rgba(0,0,0,.4);white-space:nowrap}
+#toolopts.on{display:flex}
+#toolopts label{color:var(--dim);font-size:11.5px}
+#toolopts input[type=range]{width:90px}
+#toolopts .swatches{margin:0}
+.banner{position:absolute;top:10px;left:12px;background:rgba(40,30,0,.85);border:1px solid #806a10;color:#ffe08a;padding:6px 10px;border-radius:8px;font-size:12px;max-width:340px;display:none}
+.banner.on{display:block}
+.row{display:grid;grid-template-columns:90px 1fr 62px;align-items:center;gap:7px;margin:6px 0}
+.row.two{grid-template-columns:90px 1fr}
+.row label{color:var(--dim);font-size:12px}
+input[type=number],input[type=text],select,textarea{width:100%;background:#091129;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font:inherit}
+input[type=number]{padding:4px 5px}
+textarea{resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-radius:6px;background:#091129;padding:2px}
+.chk{display:flex;align-items:center;gap:7px;color:var(--text);font-size:12px;cursor:pointer}
+.chk input{accent-color:var(--accent)}
+.chks{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0}
+.swatches{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 6px 97px}
+.swatches button{width:20px;height:20px;padding:0;border-radius:5px;border:1px solid rgba(255,255,255,.25)}
+.swatches button.on{outline:2px solid #fff;outline-offset:1px}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sect{border-top:1px solid var(--line);margin-top:12px;padding-top:8px}
+.note{color:var(--dim);font-size:11.5px;margin:4px 0}
+#layers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+#layers li{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:6px;cursor:pointer}
+#layers li:hover{background:#13214a}
+#layers .sw{width:11px;height:11px;border-radius:3px;flex:none;border:1px solid rgba(255,255,255,.3)}
+#layers .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#layers .ty{color:var(--dim);font-size:11px}
+#layers .ib{padding:1px 5px;font-size:11px;border-radius:4px;background:transparent;border-color:transparent;color:var(--dim)}
+#layers .ib.act{color:var(--accent)}
+.modal{position:fixed;inset:0;background:rgba(3,6,16,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.modal.on{display:flex}
+.modal .box{background:var(--panel);border:1px solid #2d5bb0;border-radius:12px;padding:16px;max-width:760px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 0 40px rgba(95,211,255,.15)}
+.modal img{max-width:100%;max-height:58vh;display:block;margin:10px auto;border-radius:6px;border:1px solid var(--line)}
+.modal textarea{height:260px;font:12px ui-monospace,Menlo,monospace}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:#16295a;border:1px solid #2d5bb0;padding:8px 14px;border-radius:8px;opacity:0;transition:.2s;pointer-events:none;z-index:60}
+.toast.on{opacity:1;transform:translateX(-50%)}
+#textEd{position:absolute;display:none;background:rgba(9,17,41,.92);border:1px solid var(--accent);color:#fff;font-weight:600;font-family:Inter,sans-serif;text-align:center;padding:2px 4px;resize:none;overflow:hidden;z-index:5;line-height:1.2;border-radius:4px}
+.empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--dim)}
+.empty.on{display:flex}
+#loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px}
+@media (max-width:1000px){
+  main{grid-template-columns:48px 1fr;grid-template-rows:62vh auto auto;height:auto}
+  html,body{overflow:auto}
+  #tools{grid-row:1}
+  .stagewrap{grid-column:2;grid-row:1}
+  #slidesPane{grid-column:1/3;grid-row:2;max-height:none}
+  #slideList{flex-direction:row;overflow-x:auto}
+  .sl{width:120px;flex:none}
+  aside.right{grid-column:1/3;grid-row:3;border-left:0}
+  header{overflow-x:auto}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>FFXIV <span>Mechanics</span> Board</h1>
+  <span class="status" id="status"><span class="dot"></span>Connecting…</span>
+  <div class="sp"></div>
+  <div id="avatars"></div>
+  <button id="undo" title="Undo (Ctrl+Z)">↶</button>
+  <button id="redo" title="Redo (Ctrl+Shift+Z)">↷</button>
+  <button id="jsonBtn">Save / Load</button>
+  <button id="pngBtn" class="pri">Export</button>
+</header>
+<main>
+  <div id="tools"></div>
+  <div id="slidesPane">
+    <h2>Slides</h2>
+    <div id="slideList"></div>
+    <div class="slActs">
+      <button id="addSlide" class="pri">+ New slide</button>
+      <button id="pasteSlide" disabled>Paste copied slide</button>
+    </div>
+  </div>
+  <div class="stagewrap" id="wrap">
+    <svg id="stage" xmlns="http://www.w3.org/2000/svg"></svg>
+    <textarea id="textEd" rows="1" spellcheck="false"></textarea>
+    <div id="toolopts"></div>
+    <div class="banner" id="banner"></div>
+    <div class="readout" id="readout">—</div>
+    <div class="zoom"><button id="zOut" title="Zoom out">−</button><span id="zPct">100%</span><button id="zIn" title="Zoom in">+</button><button id="zFit" title="Fit arena">Fit</button></div>
+    <div class="empty" id="empty"><div>This board has no slides yet.</div><button class="pri" id="emptyAdd">Create the first slide</button></div>
+    <div id="loading">Loading board…</div>
+  </div>
+  <aside class="right" id="insp"></aside>
+</main>
+<div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// =====================================================================
+//  SETUP — paste your Firebase web config here (Firebase console →
+//  Project settings → Your apps → Web app → "firebaseConfig").
+//  It must include databaseURL (from Build → Realtime Database).
+// =====================================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBqP03YJ4yIg2I3VJL5aqgFl19b7yMJi7c",
+  authDomain: "ffxiv-diagram.firebaseapp.com",
+  databaseURL: "https://ffxiv-diagram-default-rtdb.firebaseio.com",
+  projectId: "ffxiv-diagram",
+  storageBucket: "ffxiv-diagram.firebasestorage.app",
+  messagingSenderId: "315795999535",
+  appId: "1:315795999535:web:f2b04f6bd6353e0459afda"
+};
+// Board everyone lands on. Add #b=some-name to the URL for a separate board.
+const DEFAULT_BOARD = "raid";
+</script>
+<script>
+// ================= constants =================
+const FONT='Inter, Segoe UI, Arial, sans-serif';
+const ROLE_COL={tank:'#2f6fe0',healer:'#2e9e4f',dps:'#c8343a',other:'#7d7d8a'};
+const WM_COL={A:'#ff5a5a',B:'#ffd43b',C:'#4dabff',D:'#c77dff','1':'#ff5a5a','2':'#ffd43b','3':'#4dabff','4':'#c77dff'};
+const SWATCHES=['#ff8a2b','#ff3b3b','#ffd43b','#4dff88','#4dabff','#b46bff','#ff5fd2','#ffffff','#202020'];
+const PEER_COLS=['#ff6b6b','#ffd43b','#4dff88','#4dabff','#c77dff','#ff9f43','#2ee6d6','#ff5fd2'];
+const AOE=new Set(['circle','donut','rect','cone','cross','star','arrow','tower','boss']);
+const TARGETABLE=new Set(['circle','donut','rect','cone','cross','star','arrow','tower','boss','text']);
+const ROTATABLE=new Set(['rect','cone','cross','star','arrow','boss','text']);
+const ORANGE='#ff8a2b';
+const DEF={
+  circle:{name:'Circle AoE',radius:6,color:ORANGE,opacity:.45},
+  donut:{name:'Donut',inner:8,outer:20,color:ORANGE,opacity:.45},
+  rect:{name:'Line AoE',width:8,length:40,rot:0,anchor:'center',color:ORANGE,opacity:.45},
+  cone:{name:'Cone',radius:20,angle:90,rot:0,color:ORANGE,opacity:.45},
+  cross:{name:'Cross',width:8,length:40,rot:0,color:ORANGE,opacity:.45},
+  star:{name:'Star',width:6,length:40,rot:0,color:ORANGE,opacity:.45},
+  tether:{name:'Tether',a:'',b:'',width:.3,color:'#ff5fd2',opacity:.95,dashed:false,showDist:true,distSize:1.1},
+  arrow:{name:'Arrow',width:.6,length:8,rot:0,color:'#ffffff',opacity:.95,stroke:false},
+  tower:{name:'Tower',radius:3,count:1,color:'#b46bff',opacity:.4},
+  boss:{name:'Boss',radius:5,rot:180,color:'#ff3b3b',opacity:.2},
+  marker:{name:'Player',role:'tank',text:'MT',size:1,color:'#ffffff',opacity:1},
+  waymark:{name:'Waymark A',mark:'A',size:1.5,color:'#ffffff',opacity:1},
+  text:{name:'Text',text:'Text',size:2,rot:0,color:'#ffffff',opacity:1,boxed:false},
+  ink:{name:'Pen stroke',width:.35,color:'#ffd43b',opacity:1},
+};
+const N=(k,l,step,min,max)=>({k,l,t:'num',step,min,max});
+const S=(k,l,opts)=>({k,l,t:'sel',opts});
+const T=(k,l)=>({k,l,t:'txt'});
+const TA=(k,l)=>({k,l,t:'area'});
+const C=(k,l)=>({k,l,t:'chk'});
+const ROT=N('rot','Rotation °',1,-180,180);
+const FIELDS={
+  circle:[N('radius','Radius',.5,0,50)],
+  donut:[N('inner','Inner radius',.5,0,50),N('outer','Outer radius',.5,0,60)],
+  rect:[N('width','Width',.5,0,80),N('length','Length',.5,0,80),ROT,S('anchor','Anchor',[['center','Centered on X/Y'],['back','Back edge at X/Y']])],
+  cone:[N('radius','Radius',.5,0,60),N('angle','Cone angle °',1,1,360),ROT],
+  cross:[N('width','Arm width',.5,0,40),N('length','Total length',.5,0,80),ROT],
+  star:[N('width','Arm width',.5,0,40),N('length','Total length',.5,0,80),ROT],
+  tether:[{k:'a',l:'End 1',t:'ref'},{k:'b',l:'End 2',t:'ref'},N('width','Thickness',.05,.05,2),C('dashed','Dashed line'),C('showDist','Show distance'),N('distSize','Distance text size',.1,.4,4)],
+  arrow:[N('width','Shaft width',.1,.1,5),N('length','Length',.5,0,50),ROT],
+  tower:[N('radius','Radius',.5,0,20),N('count','Soak count',1,0,8)],
+  boss:[N('radius','Hitbox radius',.5,0,30),N('rot','Facing °',1,-180,180)],
+  marker:[S('role','Role',[['tank','Tank'],['healer','Healer'],['dps','DPS'],['other','Other']]),T('text','Label'),N('size','Size',.1,.3,4)],
+  waymark:[S('mark','Mark',['A','B','C','D','1','2','3','4'].map(m=>[m,m])),N('size','Size',.1,.3,5)],
+  text:[TA('text','Text'),N('size','Font size',.1,.3,10),ROT,C('boxed','Dark box behind text')],
+  ink:[N('width','Thickness',.05,.05,3)],
+};
+const TYPE_LABEL={circle:'Circle',donut:'Donut',rect:'Rectangle / Line',cone:'Cone',cross:'Cross',star:'Star (8-way)',tether:'Tether',arrow:'Arrow',tower:'Tower',boss:'Boss',marker:'Player',waymark:'Waymark',text:'Text',ink:'Pen stroke'};
+const DEFAULT_ARENA={shape:'circle',radius:20,cx:100,cy:100,margin:4,bg:'#070d1f',floor:'#1a2b5c',floor2:'#0d1838',edge:'#5fd3ff',
+  grid:true,gridStep:1,rings:true,spokes:true,cardinals:true,clip:true,snap:0.5,showTitle:true};
+const ICON={
+  select:'<path d="M5 3l12 8-5.5 1.2L14 18l-2.3 1-2.6-5.7L5 17z" fill="currentColor"/>',
+  hand:'<path d="M7 11V5.5a1.5 1.5 0 013 0V10m0-5.5V4a1.5 1.5 0 013 0v6m0-4.5a1.5 1.5 0 013 0V12c0 4-2.5 7-6 7-2.5 0-4-1.2-5.5-3.5L3.6 12.6a1.4 1.4 0 012.3-1.6L7 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  pen:'<path d="M4 20l1.2-4.4L15.6 5.2a2 2 0 012.8 0l.4.4a2 2 0 010 2.8L8.4 18.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13.5 7.3l3.2 3.2" stroke="currentColor" stroke-width="1.7"/>',
+  eraser:'<path d="M8.5 19.5L3.8 14.8a1.8 1.8 0 010-2.5l8.5-8.5a1.8 1.8 0 012.5 0l5.4 5.4a1.8 1.8 0 010 2.5L12 19.5zM7 9.5l7.5 7.5M8.5 19.5H20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+  text:'<path d="M5 5h14M12 5v14M9 19h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>',
+  arrowd:'<path d="M5 19L18 6M10 6h8v8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  circle:'<circle cx="12" cy="12" r="8" fill="#ff8a2b" fill-opacity=".5" stroke="#ff8a2b" stroke-width="1.4"/>',
+  donut:'<path d="M4 12a8 8 0 1016 0a8 8 0 10-16 0M8.5 12a3.5 3.5 0 107 0a3.5 3.5 0 10-7 0" fill="#ff8a2b" fill-opacity=".5" fill-rule="evenodd" stroke="#ff8a2b" stroke-width="1.4"/>',
+  rect:'<rect x="8" y="3" width="8" height="18" fill="#ff8a2b" fill-opacity=".5" stroke="#ff8a2b" stroke-width="1.4"/>',
+  cone:'<path d="M12 20L4 6.5A9.5 9.5 0 0120 6.5Z" fill="#ff8a2b" fill-opacity=".5" stroke="#ff8a2b" stroke-width="1.4"/>',
+  cross:'<path d="M9.5 3h5v6.5H21v5h-6.5V21h-5v-6.5H3v-5h6.5z" fill="#ff8a2b" fill-opacity=".5" stroke="#ff8a2b" stroke-width="1.3"/>',
+  star:'<path d="M10.4 2h3.2v6.1l4.3-4.3 2.3 2.3-4.3 4.3H22v3.2h-6.1l4.3 4.3-2.3 2.3-4.3-4.3V22h-3.2v-6.1l-4.3 4.3-2.3-2.3 4.3-4.3H2v-3.2h6.1L3.8 6.1l2.3-2.3 4.3 4.3z" fill="#ff8a2b" fill-opacity=".5" stroke="#ff8a2b" stroke-width="1.1" stroke-linejoin="round"/>',
+  tether:'<circle cx="5" cy="18" r="3" fill="#2f6fe0" stroke="#fff"/><circle cx="19" cy="6" r="3" fill="#c8343a" stroke="#fff"/><path d="M7.3 16.2L16.7 7.8" stroke="#ff5fd2" stroke-width="2" stroke-linecap="round"/>',
+  tower:'<circle cx="12" cy="12" r="8" fill="#b46bff" fill-opacity=".45" stroke="#d6b3ff" stroke-width="1.8"/><text x="12" y="16" font-size="10" text-anchor="middle" fill="#fff" font-weight="700" font-family="Inter">2</text>',
+  boss:'<circle cx="12" cy="13.5" r="7" fill="#ff3b3b" fill-opacity=".25" stroke="#ff3b3b" stroke-width="1.6"/><path d="M12 2.5l3 3.8H9z" fill="#ff3b3b"/>',
+  marker:'<circle cx="12" cy="12" r="8.5" fill="#2f6fe0" stroke="#fff" stroke-width="1.3"/><text x="12" y="15.5" font-size="9" text-anchor="middle" fill="#fff" font-weight="700" font-family="Inter">MT</text>',
+  waymark:'<circle cx="12" cy="12" r="8.5" fill="#ff5a5a" fill-opacity=".3" stroke="#ff5a5a" stroke-width="1.8"/><text x="12" y="16" font-size="11" text-anchor="middle" fill="#ff5a5a" font-weight="700" font-family="Inter">A</text>',
+};
+const TOOLS=[['select','Select & move (V)'],['hand','Pan (H, or hold Space)'],['pen','Pen (P)'],['eraser','Eraser — removes pen strokes (X)'],['text','Text (T)'],['arrowd','Draw arrow (A)'],['tether','Tether two players/items (L)'],'-',
+  ['circle','Circle AoE'],['donut','Donut'],['rect','Rectangle / line AoE'],['cone','Cone'],['cross','Cross'],['star','Star — cardinals + intercardinals'],['tower','Tower'],['boss','Boss'],['marker','Player marker'],['waymark','Waymark']];
+const TOOLKEYS={v:'select',h:'hand',p:'pen',x:'eraser',t:'text',a:'arrowd',l:'tether'};
+
+// ================= utils =================
+const $=id=>document.getElementById(id);
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-3);
+const r2=v=>Math.round(v*100)/100;
+const clone=x=>x==null?x:JSON.parse(JSON.stringify(x));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),2200);}
+function hashCol(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))|0;return PEER_COLS[Math.abs(h)%PEER_COLS.length];}
+
+// ================= data layer =================
+let store=null, MODE='loading', canWrite=true, myId=null, userNS=null, room=null, dl=null;
+const server={slides:new Map(),items:new Map()};
+const local={slides:new Map(),items:new Map()};
+const loaded={slides:false,items:false};
+const KEY='ffxiv-board-v2', CLIPKEY='ffxiv-board-clip';
+
+function remoteStore(db){
+  return {
+    set:(col,id,d)=>db.doc(col+'/'+id).set(d),
+    del:(col,id)=>db.doc(col+'/'+id).delete(),
+    sub:(col,cb,err)=>db.collection(col).onSnapshot(cb,err),
+  };
+}
+function localStore(){
+  let data={slides:{},items:{}};
+  try{const j=JSON.parse(localStorage.getItem(KEY));if(j&&j.slides&&j.items)data=j;}catch(e){}
+  const subs={slides:[],items:[]};
+  const emit=col=>{const docs=Object.entries(data[col]).map(([id,d])=>({id,data:()=>d}));subs[col].forEach(cb=>cb({docs,metadata:{fromCache:false}}));};
+  const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){}};
+  return {
+    set:async(col,id,d)=>{data[col][id]=clone(d);persist();emit(col);},
+    del:async(col,id)=>{delete data[col][id];persist();emit(col);},
+    sub:(col,cb)=>{subs[col].push(cb);setTimeout(()=>emit(col));return()=>{};},
+    isEmpty:()=>!Object.keys(data.slides).length,
+  };
+}
+function getDoc(col,id){const l=local[col];if(l.has(id))return l.get(id);return server[col].get(id)||null;}
+function allDocs(col){const m=new Map(server[col]);for(const[id,d]of local[col]){if(d===null)m.delete(id);else m.set(id,d);}return m;}
+function slidesSorted(){return[...allDocs('slides').values()].sort((a,b)=>(a.order-b.order)||(a.id<b.id?-1:1));}
+const TIER=t=>t==='waymark'?1:t==='tether'?1.5:(t==='ink'||t==='arrow'||t==='marker'||t==='text')?2:0;
+function slideItems(sid){return[...allDocs('items').values()].filter(i=>i.slide===sid).sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));}
+function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
+function arenaOf(sl){return{...DEFAULT_ARENA,...((sl&&sl.arena)||{})};}
+
+// write queue: one write at a time per doc, newest value wins
+const wq=new Map();
+function queueWrite(col,id,data){
+  local[col].set(id,data);
+  const k=col+'/'+id;let e=wq.get(k);
+  if(!e){e={busy:false,has:false,next:null};wq.set(k,e);}
+  e.next=data;e.has=true;
+  if(!e.busy)flush(col,id,e);
+  scheduleRender();
+}
+async function flush(col,id,e){
+  e.busy=true;
+  while(e.has){
+    const d=e.next;e.has=false;
+    try{ if(d===null) await store.del(col,id); else await store.set(col,id,d); }
+    catch(err){ onWriteError(err); }
+  }
+  e.busy=false;wq.delete(col+'/'+id);local[col].delete(id);scheduleRender();
+}
+function onWriteError(err){
+  const c=err&&err.code;
+  if(c==='invalid_argument'&&MODE==='shared'){ setReadOnly(true); toast('Your changes could not be saved — you have view-only access.'); }
+  else if(c==='quota_exceeded') toast('The board is full — delete some slides or pen strokes.');
+  else toast('A change failed to save. Try again.');
+}
+
+// gestures → undo history (per person)
+let gest=null;const undoStack=[],redoStack=[];
+function touch(col,id){
+  if(!gest){gest={before:new Map(),manual:false};queueMicrotask(endGesture);}
+  const k=col+'|'+id;if(!gest.before.has(k))gest.before.set(k,clone(getDoc(col,id)));
+}
+function edit(col,id,data){
+  if(!canWrite){toast('View only — you can’t edit this board.');return false;}
+  touch(col,id);queueWrite(col,id,data===null?null:clone(data));return true;
+}
+function beginGesture(){if(!gest)gest={before:new Map(),manual:true};else gest.manual=true;}
+function endGesture(){
+  if(!gest)return;const g=gest;gest=null;const ch=[];
+  for(const[k,b]of g.before){const[col,id]=k.split('|');const a=clone(getDoc(col,id));if(JSON.stringify(a)!==JSON.stringify(b))ch.push({col,id,b,a});}
+  if(ch.length){undoStack.push(ch);if(undoStack.length>100)undoStack.shift();redoStack.length=0;}
+  updUndo();
+}
+function undo(){endGesture();const ch=undoStack.pop();if(!ch)return;ch.forEach(c=>queueWrite(c.col,c.id,clone(c.b)));redoStack.push(ch);afterHistory(ch,'b');}
+function redo(){endGesture();const ch=redoStack.pop();if(!ch)return;ch.forEach(c=>queueWrite(c.col,c.id,clone(c.a)));undoStack.push(ch);afterHistory(ch,'a');}
+function afterHistory(ch,key){
+  const sl=ch.find(c=>c.col==='slides'&&c[key]);const it=ch.find(c=>c.col==='items'&&c[key]);
+  const target=(it&&it[key].slide)||(sl&&sl.id);
+  if(target&&target!==curSlide&&getDoc('slides',target))goSlide(target);
+  updUndo();renderAll();
+}
+function updUndo(){$('undo').disabled=!undoStack.length;$('redo').disabled=!redoStack.length;}
+
+function patchItem(id,patch){const d=getDoc('items',id);if(!d)return;edit('items',id,{...clone(d),...patch});}
+
+// ================= view state =================
+let curSlide=null, selIds=[], tool='select', view={x:100,y:100,h:24}, spaceDown=false;
+const toolStyle={pen:{color:'#ffd43b',width:.35,opacity:1},arrowd:{color:'#ffffff',width:.6,opacity:.95},text:{color:'#ffffff',size:2},tether:{color:'#ff5fd2',width:.3,opacity:.95}};
+let picking=null, tetherStart=null;
+let peers=[], names={}, following=null;
+let drag=null, preview=null;
+
+function fitView(){const A=arenaOf(curSlideDoc());view={x:A.cx,y:A.cy,h:A.radius+A.margin};}
+function vk(){return view.h/24;}
+
+// ================= rendering =================
+function arenaShape(A,attrs){const R=A.radius;return A.shape==='square'?`<rect x="${A.cx-R}" y="${A.cy-R}" width="${2*R}" height="${2*R}" ${attrs}/>`:`<circle cx="${A.cx}" cy="${A.cy}" r="${R}" ${attrs}/>`;}
+function aoeAttrs(s){const so=Math.min(1,s.opacity+.4);return `fill="${s.color}" fill-opacity="${s.opacity}"`+(s.stroke!==false?` stroke="${s.color}" stroke-opacity="${so}" stroke-width="0.15" stroke-linejoin="round"`:'');}
+function circlePath(r){return `M${-r} 0a${r} ${r} 0 1 0 ${2*r} 0a${r} ${r} 0 1 0 ${-2*r} 0Z`;}
+function smoothPath(pts){
+  if(!pts||!pts.length)return'';
+  if(pts.length<3)return `M${pts[0][0]} ${pts[0][1]}`+pts.slice(pts.length>1?1:0).map(p=>`L${p[0]} ${p[1]}`).join('')+(pts.length===1?`L${pts[0][0]+.01} ${pts[0][1]}`:'');
+  let d=`M${pts[0][0]} ${pts[0][1]}`;
+  for(let i=1;i<pts.length-1;i++){const mx=r2((pts[i][0]+pts[i+1][0])/2),my=r2((pts[i][1]+pts[i+1][1])/2);d+=`Q${pts[i][0]} ${pts[i][1]} ${mx} ${my}`;}
+  const l=pts[pts.length-1];return d+`L${l[0]} ${l[1]}`;
+}
+// outline of N equal arms through the center (4 = plus, 8 = plus + intercardinals), drawn as one polygon so overlaps don't double up
+function armsPoly(n,width,length){
+  const w=Math.max(0,width)/2,step=2*Math.PI/n,half=step/2,inner=w>0?w/Math.sin(half):0,b=Math.max(length/2,inner*Math.cos(half)+.01);
+  const rot=(x,y,t)=>[r2(x*Math.cos(t)-y*Math.sin(t)),r2(x*Math.sin(t)+y*Math.cos(t))],pts=[];
+  for(let i=0;i<n;i++){const t=i*step;pts.push(rot(-w,-b,t),rot(w,-b,t),rot(0,-inner,t+half));}
+  return pts.map(q=>q.join(',')).join(' ');
+}
+// targets: aim rotation at / stick to another item; tethers: resolve endpoints
+function resolveTargets(items){
+  let by=new Map(items.map(i=>[i.id,i]));
+  const ok=t=>t&&t.type!=='tether'&&t.type!=='ink'&&t.visible!==false;
+  items=items.map(it=>{if(it.target&&it.attach){const t=by.get(it.target);if(ok(t)&&t.id!==it.id&&(t.x!==it.x||t.y!==it.y))return{...it,x:t.x,y:t.y};}return it;});
+  by=new Map(items.map(i=>[i.id,i]));
+  return items.map(it=>{
+    if(it.type==='tether'){const a=by.get(it.a),b=by.get(it.b);if(!ok(a)||!ok(b)||a.id===b.id)return{...it,_dangling:true};
+      return{...it,x:r2((a.x+b.x)/2),y:r2((a.y+b.y)/2),_a:[a.x,a.y],_b:[b.x,b.y]};}
+    if(it.target&&!it.attach&&ROTATABLE.has(it.type)){const t=by.get(it.target);
+      if(ok(t)&&t.id!==it.id){const dx=t.x-it.x,dy=t.y-it.y;if(Math.hypot(dx,dy)>1e-6)return{...it,rot:normRot(Math.atan2(dx,-dy)*180/Math.PI+(+it.aimOffset||0)),_aimed:true};}}
+    return it;
+  });
+}
+function tetherSVG(s,live,k){
+  if(s._dangling||!s._a)return'';
+  const[ax,ay]=s._a,[bx,by]=s._b,d=Math.hypot(bx-ax,by-ay),w=Math.max(.02,s.width);
+  let o=`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${s.color}" stroke-opacity="${s.opacity*.35}" stroke-width="${w*3}" stroke-linecap="round"/>`+
+    `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${s.color}" stroke-opacity="${s.opacity}" stroke-width="${w}" stroke-linecap="round"${s.dashed?` stroke-dasharray="${w*3} ${w*2.5}"`:''}/>`;
+  if(live)o+=`<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="transparent" stroke-width="${Math.max(w*3,.9*k)}" pointer-events="stroke"/>`;
+  if(s.showDist!==false){const z=Math.max(.3,s.distSize||1.1),t=d.toFixed(1)+'y',bw=t.length*z*.62+z*.7,bh=z*1.45;
+    o+=`<g transform="translate(${r2((ax+bx)/2)} ${r2((ay+by)/2)})"><rect x="${-bw/2}" y="${-bh/2}" width="${bw}" height="${bh}" rx="${bh/2}" fill="#050a18" fill-opacity=".85" stroke="${s.color}" stroke-width="${z*.08}"/><text font-size="${z}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">${t}</text></g>`;}
+  if(s.label)o+=`<text x="${r2((ax+bx)/2)}" y="${r2((ay+by)/2+(s.distSize||1.1)*1.5)}" font-size="${s.labelSize||1.2}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${(s.labelSize||1.2)*.12}" paint-order="stroke">${esc(s.label)}</text>`;
+  return o;
+}
+function textBox(s){const lines=String(s.text||'').split('\n');const z=Math.max(.1,s.size);const w=Math.max(...lines.map(l=>l.length),1)*z*.58+z*.8, h=lines.length*z*1.2+z*.5;return{lines,w,h,z};}
+
+function shapeBody(s,live){
+  switch(s.type){
+    case'circle':return `<circle r="${Math.max(0,s.radius)}" ${aoeAttrs(s)}/>`;
+    case'donut':{const o=Math.max(0,s.outer),i=Math.max(0,Math.min(s.inner,o));return `<path d="${circlePath(o)}${i>0?circlePath(i):''}" fill-rule="evenodd" ${aoeAttrs(s)}/>`;}
+    case'rect':{const w=Math.max(0,s.width),l=Math.max(0,s.length),y=s.anchor==='back'?-l:-l/2;return `<rect x="${-w/2}" y="${y}" width="${w}" height="${l}" ${aoeAttrs(s)}/>`;}
+    case'cone':{const r=Math.max(0,s.radius),a=Math.max(0,s.angle);if(a>=359.99)return `<circle r="${r}" ${aoeAttrs(s)}/>`;
+      const h=a/2*Math.PI/180,x1=-r*Math.sin(h),y1=-r*Math.cos(h),x2=r*Math.sin(h);
+      return `<path d="M0 0L${x1} ${y1}A${r} ${r} 0 ${a>180?1:0} 1 ${x2} ${y1}Z" ${aoeAttrs(s)}/>`;}
+    case'cross':case'star':return `<polygon points="${armsPoly(s.type==='star'?8:4,s.width,s.length)}" ${aoeAttrs(s)}/>`;
+    case'arrow':{const L=Math.max(0,s.length),w=Math.max(.05,s.width),hw=w*2.6,h=Math.min(L*.45,w*2.4),b=-(L-h);
+      const p=[[-w/2,0],[w/2,0],[w/2,b],[hw/2,b],[0,-L],[-hw/2,b],[-w/2,b]];return `<polygon points="${p.map(q=>q.join(',')).join(' ')}" ${aoeAttrs(s)}/>`;}
+    case'tower':{const r=Math.max(0,s.radius);
+      return `<circle r="${r}" fill="${s.color}" fill-opacity="${s.opacity}"/><circle r="${Math.max(0,r-.15)}" fill="none" stroke="${s.color}" stroke-width="0.3" stroke-opacity="${Math.min(1,s.opacity+.5)}"/><circle r="${Math.max(0,r-.15)}" fill="none" stroke="#fff" stroke-width="0.08" stroke-opacity=".7"/>`+
+        (s.count>0?`<text font-size="${Math.max(.6,r*.75)}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${r*.06}" paint-order="stroke">${s.count}</text>`:'');}
+    case'boss':{const r=Math.max(0,s.radius);
+      return `<circle r="${r}" fill="${s.color}" fill-opacity="${s.opacity}" stroke="${s.color}" stroke-width="0.2"/><circle r="${r}" fill="none" stroke="#fff" stroke-width="0.05" stroke-opacity=".5" stroke-dasharray="0.4 0.4"/><polygon points="0,${-r-1.5} -1,${-r-.1} 1,${-r-.1}" fill="${s.color}" stroke="#fff" stroke-width="0.08"/>`;}
+    case'marker':{const z=Math.max(.1,s.size),c=ROLE_COL[s.role]||ROLE_COL.other;
+      return `<g opacity="${s.opacity}"><circle r="${z}" fill="${c}" stroke="#fff" stroke-width="${z*.12}"/><text font-size="${z*(String(s.text).length>2?.7:.85)}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(s.text)}</text></g>`;}
+    case'waymark':{const z=Math.max(.1,s.size),c=WM_COL[s.mark]||'#fff',num=/\d/.test(s.mark);
+      const base=num?`<rect x="${-z}" y="${-z}" width="${2*z}" height="${2*z}" rx="${z*.15}"`:`<circle r="${z}"`;
+      return `<g opacity="${s.opacity}">${base} fill="${c}" fill-opacity=".28" stroke="${c}" stroke-width="${z*.14}"/><text font-size="${z*1.15}" font-family="${FONT}" font-weight="700" fill="${c}" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${z*.06}" paint-order="stroke">${esc(s.mark)}</text></g>`;}
+    case'text':{const{lines,w,h,z}=textBox(s);
+      const box=s.boxed?`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="${z*.3}" fill="#050a18" fill-opacity=".78" stroke="${s.color}" stroke-opacity=".5" stroke-width="${z*.05}"/>`:(live?`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" fill="transparent"/>`:'');
+      const y0=-(lines.length-1)*z*1.2/2;
+      return `<g opacity="${s.opacity}">${box}<text font-size="${z}" font-family="${FONT}" font-weight="600" fill="${s.color}" text-anchor="middle" stroke="#000" stroke-width="${s.boxed?0:z*.1}" paint-order="stroke">${lines.map((l,i)=>`<tspan x="0" y="${y0+i*z*1.2}" dominant-baseline="central">${esc(l)||' '}</tspan>`).join('')}</text></g>`;}
+    case'ink':{const d=smoothPath(s.pts||[]);
+      return `<path d="${d}" fill="none" stroke="${s.color}" stroke-opacity="${s.opacity}" stroke-width="${Math.max(.02,s.width)}" stroke-linecap="round" stroke-linejoin="round"/>`+
+        (live?`<path d="${d}" fill="none" stroke="transparent" stroke-width="${Math.max(s.width,.9*vk())}" stroke-linecap="round" pointer-events="stroke"/>`:'');}
+  }
+  return'';
+}
+function itemSVG(s,A,live,isSel){
+  if(s.type==='tether'){if(s._dangling)return'';return `<g${live?` data-id="${s.id}" class="it${isSel?' sel':''}"${s.locked?' pointer-events="none"':''}`:''}>${tetherSVG(s,live,vk())}</g>`;}
+  const rot=ROTATABLE.has(s.type)?(s.rot||0):0;
+  const label=(s.label&&AOE.has(s.type))?`<text font-size="${s.labelSize||1.5}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${(s.labelSize||1.5)*.12}" paint-order="stroke">${esc(s.label)}</text>`:'';
+  const attrs=live?` data-id="${s.id}" class="it${isSel?' sel':''}"${s.locked?' pointer-events="none"':''}`:'';
+  const g=`<g${attrs} transform="translate(${s.x} ${s.y})"><g transform="rotate(${rot})">${shapeBody(s,live)}</g>${label}</g>`;
+  return (AOE.has(s.type)&&A.clip)?`<g clip-path="url(#${A._pre}cl)">${g}</g>`:g;
+}
+function buildSlideSVG(sl,items,o){
+  const A=arenaOf(sl);A._pre=o.pre;const P=o.pre,R=A.radius,cx=A.cx,cy=A.cy;
+  let s=`<defs><radialGradient id="${P}fg" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${R*1.15}"><stop offset="0" stop-color="${A.floor}"/><stop offset="1" stop-color="${A.floor2}"/></radialGradient>
+    <filter id="${P}gl" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.45" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <clipPath id="${P}cl">${arenaShape(A,'')}</clipPath></defs>`;
+  s+=o.live?`<rect x="${cx-2000}" y="${cy-2000}" width="4000" height="4000" fill="${A.bg}"/>`:`<rect x="${cx-R-A.margin}" y="${cy-R-A.margin}" width="${2*(R+A.margin)}" height="${2*(R+A.margin)}" fill="${A.bg}"/>`;
+  s+=arenaShape(A,`fill="url(#${P}fg)"`);
+  let g='';
+  if(A.grid&&A.gridStep>0&&!o.thumb){const st=A.gridStep,n=Math.ceil((R+1)/st);
+    for(let i=-n;i<=n;i++){const off=i*st,major=Math.abs(off/5-Math.round(off/5))<1e-6,op=major?.16:.06,sw=major?.07:.04;
+      g+=`<line x1="${cx+off}" y1="${cy-R-1}" x2="${cx+off}" y2="${cy+R+1}" stroke="#bfe6ff" stroke-opacity="${op}" stroke-width="${sw}"/><line x1="${cx-R-1}" y1="${cy+off}" x2="${cx+R+1}" y2="${cy+off}" stroke="#bfe6ff" stroke-opacity="${op}" stroke-width="${sw}"/>`;}}
+  if(A.spokes)for(let k=0;k<8;k++){const t=k*Math.PI/4,L=R*1.5;g+=`<line x1="${cx}" y1="${cy}" x2="${cx+L*Math.sin(t)}" y2="${cy-L*Math.cos(t)}" stroke="#bfe6ff" stroke-opacity="${k%2?.1:.18}" stroke-width="0.07"${k%2?' stroke-dasharray="0.5 0.5"':''}/>`;}
+  if(A.rings)for(let r=5;r<R*(A.shape==='square'?1.42:1)-.01;r+=5)g+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#bfe6ff" stroke-opacity=".14" stroke-width="0.07" stroke-dasharray="0.6 0.4"/>`;
+  g+=`<circle cx="${cx}" cy="${cy}" r="0.25" fill="#bfe6ff" fill-opacity=".5"/>`;
+  s+=`<g clip-path="url(#${P}cl)">${g}</g>`;
+  s+=arenaShape(A,`fill="none" stroke="${A.edge}" stroke-width="0.3" filter="url(#${P}gl)"`);
+  if(A.cardinals){const d=R+A.margin*.5,fs=Math.min(1.8,A.margin*.55);
+    [['N',0,-1],['E',1,0],['S',0,1],['W',-1,0]].forEach(([t,x,y])=>{s+=`<text x="${cx+x*d}" y="${cy+y*d}" font-size="${fs}" font-family="${FONT}" font-weight="700" fill="${A.edge}" fill-opacity=".85" text-anchor="middle" dominant-baseline="central">${t}</text>`;});}
+  if(A.showTitle&&sl&&sl.title&&!o.thumb)s+=`<text x="${cx-R-A.margin+.8}" y="${cy-R-A.margin+.8}" font-size="${Math.min(1.2,A.margin*.32)}" font-family="${FONT}" font-weight="700" fill="#fff" dominant-baseline="hanging">${esc(sl.title)}</text>`;
+  for(const it of resolveTargets(items)){if(it.visible===false)continue;s+=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));}
+  return s;
+}
+function exportSVG(sl,size){const A=arenaOf(sl),h=A.radius+A.margin;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${A.cx-h} ${A.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'x'+sl.id,thumb:false,live:false})}</svg>`;}
+
+// items as displayed (my drag + peers' live drags applied)
+function displayItems(){
+  let items=slideItems(curSlide);
+  const ov={};
+  for(const p of peers){if(p.isMe&&p.sameTab)continue;const d=p.presence&&p.presence.drag;if(d&&d.s===curSlide&&d.m&&typeof d.m==='object')Object.assign(ov,d.m);}
+  if(Object.keys(ov).length)items=items.map(it=>{const m=ov[it.id];if(!Array.isArray(m))return it;const n={...it,x:+m[0]||it.x,y:+m[1]||it.y};if(m.length>2&&isFinite(m[2]))n.rot=+m[2];return n;});
+  return resolveTargets(items);
+}
+
+let rq=false;function scheduleRender(){if(rq)return;rq=true;requestAnimationFrame(()=>{rq=false;renderStage();syncInsp();scheduleThumbs();});}
+function renderStage(){
+  const svg=$('stage'),sl=curSlideDoc();
+  $('empty').classList.toggle('on',MODE!=='loading'&&loaded.slides&&!slidesSorted().length);
+  if(!sl){svg.innerHTML='';return;}
+  const A=arenaOf(sl),k=vk();
+  svg.setAttribute('viewBox',`${view.x-view.h} ${view.y-view.h} ${2*view.h} ${2*view.h}`);
+  svg.classList.toggle('ro',!canWrite);
+  const items=displayItems(),sel=new Set(selIds);
+  let s=buildSlideSVG(sl,items,{pre:'L',live:true,sel});
+  // peers' selections, ink, cursors
+  let ov='';
+  for(const p of peers){
+    if(p.isMe)continue;const pr=p.presence||{};if(pr.slide!==curSlide)continue;const col=peerColor(p);
+    if(Array.isArray(pr.sel))for(const id of pr.sel.slice(0,40)){const it=items.find(i=>i.id===id);if(it)ov+=`<circle cx="${it.x}" cy="${it.y}" r="${.75*k}" fill="none" stroke="${col}" stroke-width="${.14*k}" stroke-dasharray="${.3*k} ${.18*k}" pointer-events="none"/>`;}
+    if(pr.ink&&Array.isArray(pr.ink.p)&&pr.ink.p.length){const o=pr.ink.o||[0,0];ov+=`<path transform="translate(${+o[0]||0} ${+o[1]||0})" d="${smoothPath(pr.ink.p.filter(q=>Array.isArray(q)).map(q=>[+q[0]||0,+q[1]||0]))}" fill="none" stroke="${/^#[0-9a-f]{3,8}$/i.test(pr.ink.c)?pr.ink.c:col}" stroke-width="${clamp(+pr.ink.w||.35,.02,3)}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>`;}
+  }
+  // my selection
+  for(const id of selIds){const it=items.find(i=>i.id===id);if(!it)continue;
+    ov+=`<g pointer-events="none"><circle cx="${it.x}" cy="${it.y}" r="${.55*k}" fill="none" stroke="#5fd3ff" stroke-width="${.1*k}"/><line x1="${it.x-.9*k}" y1="${it.y}" x2="${it.x+.9*k}" y2="${it.y}" stroke="#5fd3ff" stroke-width="${.07*k}"/><line x1="${it.x}" y1="${it.y-.9*k}" x2="${it.x}" y2="${it.y+.9*k}" stroke="#5fd3ff" stroke-width="${.07*k}"/></g>`;
+    if(it.type==='ink'){const b=inkBBox(it);ov+=`<rect x="${b.x0-.3}" y="${b.y0-.3}" width="${b.x1-b.x0+.6}" height="${b.y1-b.y0+.6}" fill="none" stroke="#5fd3ff" stroke-width="${.07*k}" stroke-dasharray="${.3*k} ${.2*k}" pointer-events="none"/>`;}
+    if(it.type==='text'){const b=textBox(it);ov+=`<g transform="translate(${it.x} ${it.y}) rotate(${it.rot||0})" pointer-events="none"><rect x="${-b.w/2}" y="${-b.h/2}" width="${b.w}" height="${b.h}" fill="none" stroke="#5fd3ff" stroke-width="${.07*k}" stroke-dasharray="${.3*k} ${.2*k}"/></g>`;}
+  }
+  for(const id of selIds){const it=items.find(i=>i.id===id);if(!it||!it.target)continue;const t=items.find(i=>i.id===it.target);
+    if(t&&t.id!==it.id)ov+=`<line x1="${it.x}" y1="${it.y}" x2="${t.x}" y2="${t.y}" stroke="#ffd43b" stroke-width="${.08*k}" stroke-dasharray="${.35*k} ${.25*k}" pointer-events="none"/><circle cx="${t.x}" cy="${t.y}" r="${1.2*k}" fill="none" stroke="#ffd43b" stroke-width="${.1*k}" pointer-events="none"/>`;}
+  if(tetherStart&&tetherStart.slide===curSlide){const a=items.find(i=>i.id===tetherStart.id);if(a&&tetherStart.cur){const c=tetherStart.cur,st=toolStyle.tether,d=Math.hypot(c.x-a.x,c.y-a.y);
+    ov+=`<g pointer-events="none"><line x1="${a.x}" y1="${a.y}" x2="${c.x}" y2="${c.y}" stroke="${st.color}" stroke-width="${st.width}" stroke-opacity=".7" stroke-dasharray="${st.width*3} ${st.width*2}"/><circle cx="${a.x}" cy="${a.y}" r="${1.3*k}" fill="none" stroke="${st.color}" stroke-width="${.12*k}"/><text x="${c.x+.8*k}" y="${c.y-.8*k}" font-size="${.9*k}" font-family="${FONT}" font-weight="700" fill="#fff" stroke="#000" stroke-width="${.1*k}" paint-order="stroke">${d.toFixed(1)}y</text></g>`;}}
+  if(selIds.length===1&&canWrite){const it=items.find(i=>i.id===selIds[0]);
+    if(it&&ROTATABLE.has(it.type)&&!it.locked&&!it._aimed&&!(it.target&&it.attach&&false)){const t=(it.rot||0)*Math.PI/180,hd=3.5*k,hx=it.x+hd*Math.sin(t),hy=it.y-hd*Math.cos(t);
+      ov+=`<line x1="${it.x}" y1="${it.y}" x2="${hx}" y2="${hy}" stroke="#5fd3ff" stroke-width="${.08*k}" stroke-dasharray="${.25*k} ${.15*k}" pointer-events="none"/><circle data-handle="1" cx="${hx}" cy="${hy}" r="${.6*k}" fill="#5fd3ff" stroke="#fff" stroke-width="${.1*k}"/>`;}}
+  // previews (my in-progress pen / arrow / marquee)
+  if(preview){
+    if(preview.kind==='ink')ov+=`<path transform="translate(${preview.o[0]} ${preview.o[1]})" d="${smoothPath(preview.pts)}" fill="none" stroke="${toolStyle.pen.color}" stroke-opacity="${toolStyle.pen.opacity}" stroke-width="${toolStyle.pen.width}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>`;
+    if(preview.kind==='arrow')ov+=`<g transform="translate(${preview.x} ${preview.y})" pointer-events="none"><g transform="rotate(${preview.rot})">${shapeBody({type:'arrow',length:preview.length,width:toolStyle.arrowd.width,color:toolStyle.arrowd.color,opacity:toolStyle.arrowd.opacity,stroke:false})}</g></g>`;
+    if(preview.kind==='box'){const x=Math.min(preview.x0,preview.x1),y=Math.min(preview.y0,preview.y1);ov+=`<rect x="${x}" y="${y}" width="${Math.abs(preview.x1-preview.x0)}" height="${Math.abs(preview.y1-preview.y0)}" fill="#5fd3ff" fill-opacity=".08" stroke="#5fd3ff" stroke-width="${.07*k}" stroke-dasharray="${.3*k} ${.2*k}" pointer-events="none"/>`;}
+  }
+  // cursors last
+  for(const p of peers){
+    if(p.isMe)continue;const pr=p.presence||{};if(pr.slide!==curSlide||!pr.cursor)continue;
+    const x=+pr.cursor.x,y=+pr.cursor.y;if(!isFinite(x)||!isFinite(y))continue;const col=peerColor(p),nm=peerName(p);
+    const sc=k*.045;
+    ov+=`<g transform="translate(${x} ${y})" pointer-events="none"><g transform="scale(${sc})"><path d="M0 0L0 17L4.5 13L7.5 20L10.5 18.7L7.5 12L13 12Z" fill="${col}" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></g>`+
+      `<g transform="translate(${.75*k} ${1*k})"><rect width="${(nm.length*.5+1)*k*.75}" height="${1.15*k*.75}" rx="${.3*k}" fill="${col}"/><text x="${.5*k*.75}" y="${.6*k*.75}" font-size="${.72*k*.75}" font-family="${FONT}" font-weight="700" fill="#0a1028" dominant-baseline="central">${esc(nm)}</text></g></g>`;
+  }
+  svg.innerHTML=s+ov;
+  $('zPct').textContent=Math.round((A.radius+A.margin)/view.h*100)+'%';
+}
+function inkBBox(it){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of it.pts||[[0,0]]){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1]);}return{x0:x0+it.x,y0:y0+it.y,x1:x1+it.x,y1:y1+it.y};}
+
+// thumbnails
+let tq=null;function scheduleThumbs(){clearTimeout(tq);tq=setTimeout(renderSlides,220);}
+function renderSlides(){
+  const list=$('slideList'),sls=slidesSorted();
+  const where={};for(const p of peers){const s=p.presence&&p.presence.slide;if(s&&!p.isMe)(where[s]=where[s]||[]).push(peerColor(p));}
+  list.innerHTML=sls.map((sl,i)=>{const A=arenaOf(sl),h=A.radius+A.margin;
+    return `<div class="sl${sl.id===curSlide?' on':''}" data-slide="${sl.id}"><svg viewBox="${A.cx-h} ${A.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'t'+sl.id,thumb:true,live:false})}</svg>
+      <div class="dots">${(where[sl.id]||[]).slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('')}</div>
+      <div class="cap"><span class="num">${i+1}</span><span class="tt">${esc(sl.title||'Untitled')}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;}).join('');
+  $('pasteSlide').disabled=!canWrite||!readClip('slide');
+}
+function renderAll(){renderStage();renderSlides();buildInsp();renderTools();renderAvatars();}
+
+// ================= presence / room =================
+function peerColor(p){const pr=p.presence||{};return /^#[0-9a-f]{6}$/i.test(pr.color)?pr.color:hashCol(p.by||pr.uid||p.peer);}
+function peerName(p){const id=p.by||(p.presence&&p.presence.uid);const pn=p.presence&&typeof p.presence.name==='string'?p.presence.name:'';const n=pn||(id&&names[id]);return(n||(p.kind==='agent'?'Claude':'Someone')).split(' ')[0].slice(0,16);}
+const myColor=()=>hashCol(myId||'me');
+function sendPresence(patch){if(room)room.presence(patch).catch(()=>{});}
+async function resolveNames(){
+  if(!userNS||!userNS.profiles)return;
+  const ids=[...new Set(peers.map(p=>p.by||(p.presence&&p.presence.uid)).filter(x=>typeof x==='string'&&!(x in names)))];
+  if(!ids.length)return;ids.forEach(i=>names[i]='');
+  try{const ps=await userNS.profiles(ids);ids.forEach(i=>{names[i]=(ps&&ps[i]&&ps[i].name)||'';});renderAvatars();scheduleRender();}catch(e){}
+}
+function renderAvatars(){
+  const el=$('avatars');if(!room){el.innerHTML='';return;}
+  const seen=new Set(),list=[];
+  for(const p of peers){const key=p.isMe?'me':(p.by||p.peer);if(seen.has(key))continue;seen.add(key);list.push(p);}
+  list.sort((a,b)=>(b.isMe?1:0)-(a.isMe?1:0));
+  el.innerHTML=list.slice(0,10).map(p=>{const nm=p.isMe?(myName?myName+' (you)':'You'):peerName(p);const sl=slidesSorted().findIndex(s=>s.id===(p.presence||{}).slide);
+    return `<div class="av${p.isMe?' me':''}${following===p.peer?' following':''}" data-peer="${p.peer}" style="background:${p.isMe?myColor():peerColor(p)}" title="${esc(nm)}${sl>=0?' — slide '+(sl+1):''}${p.isMe?'':following===p.peer?' (click to stop following)':' (click to follow)'}">${esc((nm[0]||'?').toUpperCase())}</div>`;}).join('');
+  const others=list.filter(p=>!p.isMe).length;
+  updStatus(others);
+}
+$('avatars').addEventListener('click',e=>{const a=e.target.closest('[data-peer]');if(!a)return;if(a.classList.contains('me')){askName(false);return;}
+  if(following===a.dataset.peer)stopFollow();else{following=a.dataset.peer;sendPresence({follow:{of:following}});applyFollow();toast('Following — pan, zoom or change slide to stop');}renderAvatars();});
+function stopFollow(){if(!following)return;following=null;sendPresence({follow:null});renderAvatars();}
+function applyFollow(){
+  if(!following)return;const p=peers.find(x=>x.peer===following);
+  if(!p){following=null;sendPresence({follow:null});toast('They left the board');renderAvatars();return;}
+  const pr=p.presence||{};
+  if(pr.slide&&pr.slide!==curSlide&&getDoc('slides',pr.slide))goSlide(pr.slide,true);
+  if(Array.isArray(pr.view)&&pr.view.length===3&&pr.view.every(isFinite)){view={x:+pr.view[0],y:+pr.view[1],h:clamp(+pr.view[2],2,300)};scheduleRender();}
+}
+let vt=null;function sendView(){clearTimeout(vt);vt=setTimeout(()=>sendPresence({view:[r2(view.x),r2(view.y),r2(view.h)]}),120);}
+function updStatus(others){
+  const st=$('status');
+  st.className='status'+(MODE==='shared'?(canWrite?' live':' ro'):'');
+  st.innerHTML=MODE==='loading'?'<span class="dot"></span>Connecting…':MODE==='shared'
+    ?`<span class="dot"></span><b>${canWrite?'Live':'View only'}</b>${room?` · ${others||0} other${others===1?'':'s'} here`:''}`
+    :'<span class="dot"></span>Not connected — add your Firebase config (saved in this browser only)';
+}
+
+// ================= slides =================
+function goSlide(id,fromFollow){
+  if(!fromFollow)stopFollow();
+  closeTextEd(true);curSlide=id;selIds=[];fitView();
+  sendPresence({slide:id,sel:[],view:[view.x,view.y,view.h]});
+  renderAll();
+}
+function nextOrder(after){const s=slidesSorted();if(after==null)return s.length?s[s.length-1].order+1:1;const i=s.findIndex(x=>x.id===after);if(i<0)return nextOrder();const a=s[i].order,b=i+1<s.length?s[i+1].order:a+2;return(a+b)/2;}
+function newSlide(){
+  const cur=curSlideDoc();const id=uid();
+  const sl={id,title:'Slide '+(slidesSorted().length+1),order:nextOrder(curSlide),arena:clone(arenaOf(cur))};
+  if(!edit('slides',id,sl))return;goSlide(id);
+}
+function dupSlide(sid,asPaste){
+  const src=asPaste||{slide:getDoc('slides',sid),items:slideItems(sid)};if(!src.slide)return;
+  const id=uid();
+  if(!edit('slides',id,{...clone(src.slide),id,title:(src.slide.title||'Slide')+(asPaste?'':' (copy)'),order:nextOrder(asPaste?curSlide:sid)}))return;
+  const map={};src.items.forEach(it=>map[it.id]=uid());
+  for(const it of remapRefs(src.items,map,()=>false)){const nid=map[it.id];edit('items',nid,{...it,id:nid,slide:id});}
+  goSlide(id);toast(asPaste?'Slide pasted':'Slide duplicated');
+}
+function delSlide(sid){
+  const sls=slidesSorted();const i=sls.findIndex(s=>s.id===sid);
+  if(!edit('slides',sid,null))return;slideItems(sid).forEach(it=>edit('items',it.id,null));
+  if(sid===curSlide){const nx=sls[i+1]||sls[i-1];curSlide=null;if(nx)goSlide(nx.id);else renderAll();}
+  toast('Slide deleted — Ctrl+Z to undo');
+}
+function moveSlide(sid,dir){
+  const s=slidesSorted();const i=s.findIndex(x=>x.id===sid),j=i+dir;if(i<0||j<0||j>=s.length)return;
+  const a=s[i],b=s[j];edit('slides',a.id,{...clone(a),order:b.order});edit('slides',b.id,{...clone(b),order:a.order});
+  if(a.order===b.order)edit('slides',a.id,{...clone(a),order:b.order+dir*.5});
+}
+function copySlide(sid){writeClip('slide',{slide:clone(getDoc('slides',sid)),items:clone(slideItems(sid))});toast('Slide copied — use “Paste copied slide” (works across tabs too)');renderSlides();}
+function writeClip(kind,data){const v={kind,data};clipMem=v;try{localStorage.setItem(CLIPKEY,JSON.stringify(v));}catch(e){}}
+let clipMem=null;function readClip(kind){let v=clipMem;try{const j=JSON.parse(localStorage.getItem(CLIPKEY));if(j)v=j;}catch(e){}return v&&v.kind===kind?v.data:null;}
+$('addSlide').onclick=newSlide;$('emptyAdd').onclick=newSlide;
+$('pasteSlide').onclick=()=>{const d=readClip('slide');if(d)dupSlide(null,d);};
+$('slideList').addEventListener('click',e=>{
+  const m=e.target.closest('[data-more]');
+  if(m){e.stopPropagation();slideMenu(m.dataset.more,m.getBoundingClientRect());return;}
+  const sl=e.target.closest('[data-slide]');if(sl&&sl.dataset.slide!==curSlide)goSlide(sl.dataset.slide);
+});
+$('slideList').addEventListener('contextmenu',e=>{const sl=e.target.closest('[data-slide]');if(!sl)return;e.preventDefault();slideMenu(sl.dataset.slide,{left:e.clientX,bottom:e.clientY,right:e.clientX});});
+function slideMenu(sid,rect){
+  closeMenu();const m=document.createElement('div');m.className='menu';m.id='menu';
+  const w=canWrite;
+  m.innerHTML=`${w?'<button data-m="rename">Rename</button>':''}${w?'<button data-m="dup">Duplicate</button>':''}<button data-m="copy">Copy slide</button>${w&&readClip('slide')?'<button data-m="paste">Paste copied slide after</button>':''}
+    ${w?'<hr><button data-m="up">Move up</button><button data-m="down">Move down</button><hr><button data-m="del" style="color:#ffb3bb">Delete slide</button>':''}`;
+  document.body.appendChild(m);
+  const x=Math.min(rect.right+4,innerWidth-190),y=Math.min(rect.bottom,innerHeight-m.offsetHeight-8);m.style.left=x+'px';m.style.top=y+'px';
+  m.onclick=e=>{const a=e.target.closest('[data-m]');if(!a)return;closeMenu();
+    ({rename:()=>{goSlide(sid);setTimeout(()=>{const t=document.querySelector('[data-st="title"]');if(t){t.focus();t.select();}},50);},
+      dup:()=>dupSlide(sid),copy:()=>copySlide(sid),paste:()=>{if(curSlide!==sid)goSlide(sid);dupSlide(null,readClip('slide'));},
+      up:()=>moveSlide(sid,-1),down:()=>moveSlide(sid,1),
+      del:()=>confirmBox(`Delete “${esc((getDoc('slides',sid)||{}).title||'this slide')}” for everyone? You can undo with Ctrl+Z.`,'Delete slide',()=>delSlide(sid))})[a.dataset.m]();};
+}
+function closeMenu(){const m=$('menu');if(m)m.remove();}
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('#menu')&&!e.target.closest('[data-more]'))closeMenu();});
+
+// ================= tools =================
+function renderTools(){
+  $('tools').innerHTML=TOOLS.map(t=>t==='-'?'<div class="div"></div>':(!canWrite&&!['select','hand'].includes(t[0]))?'':`<button data-tool="${t[0]}" class="${tool===t[0]?'on':''}" title="${t[1]}"><svg viewBox="0 0 24 24">${ICON[t[0]]}</svg></button>`).join('');
+  const svg=$('stage');svg.classList.remove('t-pen','t-text','t-eraser','t-hand','t-arrowd','t-stamp','t-tether','t-pick');
+  svg.classList.add(picking?'t-pick':'t-'+(DEF[tool]&&!['text','tether'].includes(tool)?'stamp':tool));
+  renderToolOpts();
+}
+function setTool(t){tool=t;tetherStart=null;picking=null;closeTextEd(true);if(t!=='select'&&selIds.length&&['pen','eraser','arrowd'].includes(t)){selIds=[];sendPresence({sel:[]});buildInsp();}renderTools();scheduleRender();}
+$('tools').addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(b)setTool(b.dataset.tool);});
+function renderToolOpts(){
+  const el=$('toolopts');const ts=toolStyle[tool];
+  if(!ts||!canWrite){el.classList.remove('on');return;}
+  const sw=`<div class="swatches">${SWATCHES.map(c=>`<button data-tc="${c}" class="${ts.color===c?'on':''}" style="background:${c}"></button>`).join('')}</div><input type="color" data-to="color" value="${ts.color}" style="width:34px;height:24px">`;
+  el.innerHTML=sw+(tool==='text'?`<label>Size</label><input type="range" data-to="size" min=".5" max="6" step=".1" value="${ts.size}">`
+    :`<label>Width</label><input type="range" data-to="width" min="${tool==='pen'?.05:.1}" max="${tool==='pen'?2:3}" step=".05" value="${ts.width}"><label>Opacity</label><input type="range" data-to="opacity" min=".1" max="1" step=".05" value="${ts.opacity}">`)+
+    (tool==='tether'?`<span class="note" style="margin:0">${tetherStart?'Now click the second player':'Click the first player (or any item)'}</span>`:tool==='pen'?'<span class="note" style="margin:0">Draw on the arena</span>':tool==='arrowd'?'<span class="note" style="margin:0">Drag to draw</span>':'<span class="note" style="margin:0">Click to place</span>');
+  el.classList.add('on');
+}
+$('toolopts').addEventListener('click',e=>{const b=e.target.closest('[data-tc]');if(b){toolStyle[tool].color=b.dataset.tc;renderToolOpts();}});
+$('toolopts').addEventListener('input',e=>{const k=e.target.dataset.to;if(!k)return;toolStyle[tool][k]=k==='color'?e.target.value:parseFloat(e.target.value);if(k==='color')renderToolOpts();});
+
+// ================= item helpers =================
+function make(type,extra={}){const A=arenaOf(curSlideDoc());return{id:uid(),slide:curSlide,type,x:A.cx,y:A.cy,z:newZ(),stroke:true,visible:true,locked:false,label:'',labelSize:1.5,...clone(DEF[type]),...extra};}
+function newZ(){const it=slideItems(curSlide);return it.length?(it[it.length-1].z||0)+1:1;}
+function addItem(it,select=true){if(!edit('items',it.id,it))return;if(select){selIds=[it.id];sendPresence({sel:selIds});buildInsp();}}
+function polar(p){const A=arenaOf(curSlideDoc()),dx=p.x-A.cx,dy=p.y-A.cy;let a=Math.atan2(dx,-dy)*180/Math.PI;if(a<0)a+=360;const d=Math.hypot(dx,dy);return{d,a:d<1e-9?0:a};}
+function fromPolar(d,a){const A=arenaOf(curSlideDoc()),t=a*Math.PI/180;return{x:r2(A.cx+d*Math.sin(t)),y:r2(A.cy-d*Math.cos(t))};}
+const normRot=a=>r2(((a+180)%360+360)%360-180);
+function snap(v){const st=arenaOf(curSlideDoc()).snap;return st>0?r2(Math.round(v/st)*st):r2(v);}
+const selItems=()=>selIds.map(id=>getDoc('items',id)).filter(Boolean);
+function setSel(ids){selIds=ids;sendPresence({sel:ids.slice(0,40)});buildInsp();scheduleRender();}
+
+function deleteSel(){const its=selItems();if(!its.length)return;const gone=new Set(its.map(i=>i.id));its.forEach(it=>edit('items',it.id,null));
+  slideItems(curSlide).forEach(t=>{if(t.type==='tether'&&!gone.has(t.id)&&(gone.has(t.a)||gone.has(t.b)))edit('items',t.id,null);});setSel([]);toast('Deleted — Ctrl+Z to undo');}
+function remapRefs(list,map,valid){return list.map(it=>{const n={...clone(it)};for(const f of['target','a','b']){if(!n[f])continue;if(map[n[f]])n[f]=map[n[f]];else if(!valid(n[f]))n[f]='';}return n;}).filter(n=>n.type!=='tether'||(n.a&&n.b));}
+function duplicateSel(){const its=selItems();if(!its.length)return;let z=newZ();const ids=[],map={};its.forEach(it=>map[it.id]=uid());
+  for(const it of remapRefs(its,map,id=>!!getDoc('items',id))){const id=map[it.id];ids.push(id);edit('items',id,{...it,id,x:r2(it.x+1),y:r2(it.y+1),z:z++});}setSel(ids);}
+function copySel(){const its=selItems();if(!its.length)return;writeClip('items',clone(its));toast(`Copied ${its.length} item${its.length>1?'s':''}`);}
+function pasteItems(){const its=readClip('items');if(!its||!its.length||!curSlide)return;let z=newZ();const ids=[],map={};const same=its[0].slide===curSlide;its.forEach(it=>map[it.id]=uid());
+  for(const it of remapRefs(its,map,id=>{const d=getDoc('items',id);return!!(d&&d.slide===curSlide);})){const id=map[it.id];ids.push(id);edit('items',id,{...it,id,slide:curSlide,z:z++,x:r2(it.x+(same?1:0)),y:r2(it.y+(same?1:0))});}setSel(ids);}
+function reorder(dir){
+  const its=slideItems(curSlide);const s=selItems()[0];if(!s)return;const i=its.findIndex(x=>x.id===s.id),j=dir==='top'?its.length-1:dir==='bottom'?0:i+dir;
+  if(j<0||j>=its.length||j===i)return;its.splice(i,1);its.splice(j,0,s);its.forEach((it,n)=>{if((it.z||0)!==n+1)edit('items',it.id,{...clone(it),z:n+1});});
+}
+function faceToward(s,out){const A=arenaOf(curSlideDoc()),dx=A.cx-s.x,dy=A.cy-s.y;if(Math.hypot(dx,dy)<1e-9)return;patchItem(s.id,{rot:normRot(Math.atan2(dx,-dy)*180/Math.PI+(out?180:0))});}
+
+// ================= inspector =================
+function numRow(k,l,step,min,max,attr='data-k'){return `<div class="row"><label>${l}</label><input type="range" ${attr}="${k}" step="${step}" min="${min}" max="${max}"><input type="number" ${attr}="${k}" step="${step}"></div>`;}
+function selRow(k,l,opts,attr='data-k'){return `<div class="row two"><label>${l}</label><select ${attr}="${k}">${opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></div>`;}
+function txtRow(k,l,attr='data-k'){return `<div class="row two"><label>${l}</label><input type="text" ${attr}="${k}"></div>`;}
+function areaRow(k,l,attr='data-k'){return `<div class="row two"><label>${l}</label><textarea rows="2" ${attr}="${k}"></textarea></div>`;}
+function refOpts(selfId){const its=slideItems(curSlide).filter(i=>i.id!==selfId&&i.type!=='tether'&&i.type!=='ink');
+  const lab=i=>(i.type==='marker'?(i.text||'Player')+' ('+(i.role||'')+')':(i.name||TYPE_LABEL[i.type]));
+  its.sort((a,b)=>(a.type==='marker'?0:1)-(b.type==='marker'?0:1));
+  return [['','— none —'],...its.map(i=>[i.id,lab(i)])];}
+function refRow(k,l,selfId){return `<div class="row two"><label>${l}</label><div style="display:flex;gap:5px"><select data-k="${k}" style="flex:1;min-width:0">${refOpts(selfId).map(([v,t])=>`<option value="${v}">${esc(t)}</option>`).join('')}</select><button data-pick="${k}" title="Click an item on the arena">Pick</button></div></div>`;}
+function colRow(k,l,attr='data-k'){return `<div class="row two"><label>${l}</label><input type="color" ${attr}="${k}"></div>`;}
+function chk(k,l,attr='data-k'){return `<label class="chk"><input type="checkbox" ${attr}="${k}">${l}</label>`;}
+let inspKey='';
+function buildInsp(){
+  const insp=$('insp'),sl=curSlideDoc();
+  const its=selItems();inspKey=curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):'');
+  if(!sl){insp.innerHTML='<p class="note">No slide selected.</p>';return;}
+  const A=arenaOf(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
+  if(!its.length){
+    const items=slideItems(curSlide);
+    insp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>Slide</h2>${txtRow('title','Slide title','data-st')}
+      <div class="chks">${chk('showTitle','Show title on arena','data-a')}</div>
+      <div class="btnrow"><button data-act="waymarks">+ 8 waymarks</button><button data-act="party">+ Party clock spots</button></div>
+      <div class="sect"><h2>Arena</h2>
+      ${selRow('shape','Shape',[['circle','Circle'],['square','Square']],'data-a')}
+      ${numRow('radius','Radius (y)',.5,5,50,'data-a')}${numRow('cx','Center X',.5,0,200,'data-a')}${numRow('cy','Center Y',.5,0,200,'data-a')}
+      ${numRow('margin','Margin (y)',.5,1,15,'data-a')}${numRow('snap','Snap (y)',.25,0,5,'data-a')}
+      <p class="note">Game coordinates: center (100, 100), +X east, +Y south. 0° = North, clockwise. Snap 0 = free.</p></div>
+      <div class="sect"><h2>Guides</h2><div class="chks">${chk('grid','Grid','data-a')}${chk('rings','5y rings','data-a')}${chk('spokes','8-way spokes','data-a')}${chk('cardinals','N/E/S/W','data-a')}${chk('clip','Clip AoEs to arena','data-a')}</div>
+      ${numRow('gridStep','Grid step (y)',.5,.5,10,'data-a')}</div>
+      <div class="sect"><h2>Colors</h2>${colRow('bg','Background','data-a')}${colRow('floor','Floor center','data-a')}${colRow('floor2','Floor edge','data-a')}${colRow('edge','Arena edge','data-a')}
+      <div class="btnrow"><button data-act="resetArena">Reset arena look</button></div></div></fieldset>
+      <div class="sect"><h2>Layers <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(top = in front)</span></h2><ul id="layers">${
+        items.length?[...items].reverse().map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
+          return `<li data-lsel="${s.id}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span><span class="ty">${s.type}</span>${canWrite?`<button class="ib ${s.visible!==false?'act':''}" data-vis="${s.id}" title="Show/hide">${s.visible!==false?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
+        :'<li class="note" style="cursor:default">Nothing on this slide yet — pick a tool on the left.</li>'}</ul></div>`;
+  } else if(its.length>1){
+    insp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>${its.length} items selected</h2>
+      <div class="row two"><label>Color</label><input type="color" data-multi="color" value="${its[0].color||'#ffffff'}"></div>
+      <div class="swatches">${SWATCHES.map(c=>`<button data-sw="${c}" style="background:${c}"></button>`).join('')}</div>
+      <div class="row"><label>Opacity</label><input type="range" data-multi="opacity" min="0" max="1" step=".05" value="${its[0].opacity??1}"><span></span></div>
+      <div class="btnrow"><button data-act="dup">Duplicate</button><button data-act="copy">Copy</button><button data-act="del" class="danger">Delete</button><button data-act="deselect">Done</button></div>
+      <p class="note">Layers: AoEs draw under waymarks, which draw under players, arrows, pen and text. Drag any selected item to move them together. Shift-click to add or remove items.</p></fieldset>`;
+  } else {
+    const s=its[0];
+    const aimed=!!(s.target&&!s.attach&&ROTATABLE.has(s.type)&&getDoc('items',s.target));
+    const f=(FIELDS[s.type]||[]).map(x=>x.t==='ref'?refRow(x.k,x.l,s.id):(x.k==='rot'&&aimed)?'':x.t==='num'?numRow(x.k,x.l,x.step,x.min,x.max):x.t==='sel'?selRow(x.k,x.l,x.opts):x.t==='area'?areaRow(x.k,x.l):x.t==='chk'?`<div class="chks">${chk(x.k,x.l)}</div>`:txtRow(x.k,x.l)).join('');
+    const aoe=AOE.has(s.type),hasColor=!['marker','waymark'].includes(s.type);
+    insp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>${TYPE_LABEL[s.type]}</h2>${txtRow('name','Name')}
+      ${!['ink','tether'].includes(s.type)?numRow('x','X',.1,r2(A.cx-span),r2(A.cx+span))+numRow('y','Y',.1,r2(A.cy-span),r2(A.cy+span))+numRow('pd','Dist. from ctr',.1,0,A.radius+A.margin)+numRow('pa','Angle from ctr °',1,0,360):''}
+      ${!['ink','tether'].includes(s.type)?`<div class="btnrow" style="margin-top:2px"><button data-act="center">Move to center</button>${ROTATABLE.has(s.type)&&!aimed?'<button data-act="faceIn">Face center</button><button data-act="faceOut">Face outward</button>':''}</div>`:''}
+      <div class="sect">${f}</div>
+      ${TARGETABLE.has(s.type)?`<div class="sect"><h2>Target</h2>${refRow('target','Target',s.id)}
+        ${s.target?`<div class="chks">${chk('attach','Stick to target’s position')}</div>`:''}
+        ${aimed?numRow('aimOffset','Aim offset °',1,-180,180)+'<p class="note">Rotation follows the target automatically — move the target and this shape re-aims.</p>':s.target&&s.attach?'<p class="note">This shape follows its target around.</p>':`<p class="note">${ROTATABLE.has(s.type)?'Pick a player and this shape will always aim at them.':'Pick a player and tick “stick” to make this shape follow them.'}</p>`}</div>`:''}
+      <div class="sect">${hasColor?colRow('color','Color')+`<div class="swatches">${SWATCHES.map(c=>`<button data-sw="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>`:''}
+        ${numRow('opacity','Opacity',.05,0,1)}${aoe||s.type==='tether'?txtRow('label','Label')+numRow('labelSize','Label size',.1,.3,6):''}
+        <div class="chks">${aoe&&!['tower','boss'].includes(s.type)?chk('stroke','Outline'):''}${chk('visible','Visible')}${chk('locked','Locked')}</div></div>
+      <div class="sect btnrow"><button data-act="top" title="Bring to front">⤒ Front</button><button data-act="up">▲</button><button data-act="down">▼</button><button data-act="bottom" title="Send to back">⤓ Back</button>
+        <button data-act="dup">Duplicate</button><button data-act="copy">Copy</button><button data-act="del" class="danger">Delete</button><button data-act="deselect">Done</button></div></fieldset>`;
+  }
+  syncInsp(null,true);
+}
+function syncInsp(except,force){
+  const insp=$('insp');
+  const its=selItems();const key=curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0):'');
+  if(key!==inspKey&&!force){buildInsp();return;}
+  const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
+  insp.querySelectorAll('[data-k],[data-a],[data-st]').forEach(el=>{
+    if(el===except||(el===act&&!force))return;let v;
+    if(el.dataset.st)v=sl&&sl[el.dataset.st];
+    else if(el.dataset.a)v=A[el.dataset.a];
+    else{if(!s)return;const k=el.dataset.k;if(k==='pd'||k==='pa'){const p=polar(s);v=k==='pd'?p.d:p.a;}else v=s[k];if(k==='stroke'&&v===undefined)v=true;if(k==='visible'&&v===undefined)v=true;}
+    if(el.type==='checkbox')el.checked=!!v;else{const nv=typeof v==='number'?String(+v.toFixed(2)):(v??'');if(el.value!==nv)el.value=nv;}
+  });
+}
+function readVal(el){if(el.type==='checkbox')return el.checked;if(el.type==='number'||el.type==='range'){const v=parseFloat(el.value);return isNaN(v)?null:v;}return el.value;}
+const insp=$('insp');
+insp.addEventListener('input',e=>{
+  const el=e.target,v=readVal(el);if(v===null)return;beginGesture();
+  if(el.dataset.multi){selItems().forEach(it=>patchItem(it.id,{[el.dataset.multi]:v}));return;}
+  const sl=curSlideDoc();if(!sl)return;
+  if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:v});scheduleThumbs();return;}
+  if(el.dataset.a){edit('slides',sl.id,{...clone(sl),arena:{...arenaOf(sl),[el.dataset.a]:v}});syncInsp(el);return;}
+  const k=el.dataset.k,s=selItems()[0];if(!k||!s)return;
+  let patch={[k]:v};
+  if(k==='pd'||k==='pa'){const p=polar(s);patch=fromPolar(k==='pd'?v:p.d,k==='pa'?v:p.a);}
+  if(k==='mark'&&/^Waymark/.test(s.name||''))patch.name='Waymark '+v;
+  if(k==='target'&&!v)patch.attach=false;
+  if(k==='target'&&v&&!ROTATABLE.has(s.type))patch.attach=true;
+  if(k==='role'&&s.type==='marker'){}
+  patchItem(s.id,patch);syncInsp(el);
+});
+insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.a==='shape'||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
+insp.addEventListener('focusout',()=>endGesture());
+insp.addEventListener('click',e=>{
+  const sw=e.target.closest('[data-sw]');if(sw){selItems().forEach(it=>patchItem(it.id,{color:sw.dataset.sw}));return;}
+  const v=e.target.closest('[data-vis]');if(v){const it=getDoc('items',v.dataset.vis);if(it)patchItem(it.id,{visible:it.visible===false});setTimeout(buildInsp);return;}
+  const l=e.target.closest('[data-lock]');if(l){const it=getDoc('items',l.dataset.lock);if(it)patchItem(it.id,{locked:!it.locked});setTimeout(buildInsp);return;}
+  const li=e.target.closest('[data-lsel]');if(li){setSel([li.dataset.lsel]);return;}
+  const pk=e.target.closest('[data-pick]');if(pk&&selIds.length===1){picking={id:selIds[0],field:pk.dataset.pick};renderTools();toast('Click a player or item on the arena (Esc to cancel)');return;}
+  const b=e.target.closest('[data-act]');if(b)action(b.dataset.act);
+});
+function action(a){
+  const sl=curSlideDoc();const s=selItems()[0];
+  switch(a){
+    case'resetArena':if(sl)edit('slides',sl.id,{...clone(sl),arena:{...arenaOf(sl),bg:DEFAULT_ARENA.bg,floor:DEFAULT_ARENA.floor,floor2:DEFAULT_ARENA.floor2,edge:DEFAULT_ARENA.edge}});return;
+    case'waymarks':{const A=arenaOf(sl),d=Math.max(2,A.radius-5);slideItems(curSlide).filter(i=>i.type==='waymark').forEach(i=>edit('items',i.id,null));let z=newZ();
+      [['A',0],['1',45],['B',90],['2',135],['C',180],['3',225],['D',270],['4',315]].forEach(([m,an])=>{const it=make('waymark',{mark:m,name:'Waymark '+m,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
+    case'party':{const A=arenaOf(sl),d=Math.min(8,A.radius*.4);let z=newZ();
+      [['tank','MT',0],['tank','OT',90],['healer','H1',270],['healer','H2',180],['dps','M1',225],['dps','M2',135],['dps','R1',315],['dps','R2',45]].forEach(([role,t,an])=>{const it=make('marker',{role,text:t,name:t,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
+    case'deselect':setSel([]);return;
+    case'dup':duplicateSel();return;
+    case'copy':copySel();return;
+    case'del':deleteSel();return;
+  }
+  if(!s)return;
+  switch(a){
+    case'center':{const A=arenaOf(sl);patchItem(s.id,{x:A.cx,y:A.cy});break;}
+    case'faceIn':faceToward(s,false);break;case'faceOut':faceToward(s,true);break;
+    case'up':reorder(1);break;case'down':reorder(-1);break;case'top':reorder('top');break;case'bottom':reorder('bottom');break;
+  }
+}
+
+// ================= canvas interaction =================
+const svg=$('stage');
+function toWorld(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const m=svg.getScreenCTM();return m?p.matrixTransform(m.inverse()):{x:0,y:0};}
+function itemAt(e){const g=e.target.closest&&e.target.closest('[data-id]');return g?getDoc('items',g.dataset.id):null;}
+svg.addEventListener('pointerdown',e=>{
+  if(!curSlide)return;closeMenu();
+  const pt=toWorld(e);
+  if(textEd.open)closeTextEd(false);
+  if(e.button===1||spaceDown||tool==='hand'||(e.button===2)){e.preventDefault();drag={mode:'pan',sx:e.clientX,sy:e.clientY,vx:view.x,vy:view.y};svg.setPointerCapture(e.pointerId);svg.classList.add('panning');stopFollow();return;}
+  if(e.button!==0)return;
+  if(!canWrite){const it=itemAt(e);setSel(it?[it.id]:[]);if(!it){drag={mode:'pan',sx:e.clientX,sy:e.clientY,vx:view.x,vy:view.y};svg.setPointerCapture(e.pointerId);}return;}
+  svg.setPointerCapture(e.pointerId);
+  if(picking){const it=itemAt(e);const pk=picking;picking=null;renderTools();
+    if(it&&it.id!==pk.id&&it.type!=='tether'&&it.type!=='ink'){patchItem(pk.id,{[pk.field]:it.id});toast('Target set: '+(it.name||TYPE_LABEL[it.type]));setSel([pk.id]);}else toast('Pick cancelled');return;}
+  if(tool==='tether'){const it=itemAt(e);
+    if(!it||it.type==='tether'||it.type==='ink'){if(tetherStart){tetherStart=null;renderToolOpts();scheduleRender();}else toast('Click a player or item to start the tether');return;}
+    if(!tetherStart){tetherStart={id:it.id,slide:curSlide,cur:{x:it.x,y:it.y}};renderToolOpts();scheduleRender();return;}
+    if(it.id!==tetherStart.id){const st=toolStyle.tether;const a=getDoc('items',tetherStart.id);
+      addItem(make('tether',{a:tetherStart.id,b:it.id,color:st.color,width:st.width,opacity:st.opacity,name:'Tether '+((a&&(a.text||a.name))||'')+' – '+(it.text||it.name||'')}),false);}
+    tetherStart=null;renderToolOpts();scheduleRender();return;}
+  if(tool==='pen'){const o=[r2(pt.x),r2(pt.y)];preview={kind:'ink',o,pts:[[0,0]]};drag={mode:'pen'};scheduleRender();return;}
+  if(tool==='eraser'){beginGesture();drag={mode:'erase'};eraseAt(e);return;}
+  if(tool==='arrowd'){preview={kind:'arrow',x:snap(pt.x),y:snap(pt.y),rot:0,length:0};drag={mode:'arrow'};return;}
+  if(tool==='text'){const it=make('text',{x:snap(pt.x),y:snap(pt.y),text:'',color:toolStyle.text.color,size:toolStyle.text.size,name:'Text'});drag=null;openTextEd(it,true);return;}
+  if(DEF[tool]){const extra={x:snap(pt.x),y:snap(pt.y)};const it=make(tool,extra);if(tool==='marker'){}addItem(it);setTool('select');drag=null;return;}
+  // select tool
+  if(e.target.closest('[data-handle]')&&selIds.length===1){const it=getDoc('items',selIds[0]);beginGesture();touch('items',it.id);drag={mode:'rot',id:it.id,moved:false};return;}
+  const it=itemAt(e);
+  if(it){
+    if(e.shiftKey){setSel(selIds.includes(it.id)?selIds.filter(x=>x!==it.id):[...selIds,it.id]);drag=null;return;}
+    if(!selIds.includes(it.id))setSel([it.id]);
+    const start={};selItems().forEach(s=>{if(!s.locked&&s.type!=='tether'&&!(s.target&&s.attach&&getDoc('items',s.target)))start[s.id]=[s.x,s.y];});
+    beginGesture();Object.keys(start).forEach(id=>touch('items',id));
+    drag={mode:'move',px:pt.x,py:pt.y,start,ax:it.x,ay:it.y,moved:false};
+  } else {
+    if(!e.shiftKey&&selIds.length)setSel([]);
+    preview={kind:'box',x0:pt.x,y0:pt.y,x1:pt.x,y1:pt.y};drag={mode:'box',add:e.shiftKey};
+  }
+});
+function eraseAt(e){
+  const el=document.elementFromPoint(e.clientX,e.clientY);const g=el&&el.closest&&el.closest('[data-id]');
+  if(g){const it=getDoc('items',g.dataset.id);if(it&&it.type==='ink'&&!it.locked)edit('items',it.id,null);}
+}
+svg.addEventListener('pointermove',e=>{
+  const pt=toWorld(e),p=polar(pt);
+  $('readout').textContent=`X ${pt.x.toFixed(1)}  Y ${pt.y.toFixed(1)}  ·  ${p.d.toFixed(1)}y @ ${p.a.toFixed(0)}°`;
+  sendPresence({cursor:{x:r2(pt.x),y:r2(pt.y)}});
+  if(tetherStart){tetherStart.cur={x:pt.x,y:pt.y};scheduleRender();}
+  if(!drag)return;
+  if(drag.mode==='pan'){const m=svg.getScreenCTM();if(!m)return;view.x=drag.vx-(e.clientX-drag.sx)/m.a;view.y=drag.vy-(e.clientY-drag.sy)/m.d;sendView();scheduleRender();return;}
+  if(drag.mode==='pen'){const o=preview.o,last=preview.pts[preview.pts.length-1],rx=r2(pt.x-o[0]),ry=r2(pt.y-o[1]);
+    if(Math.hypot(rx-last[0],ry-last[1])>=.12*Math.max(.5,vk())&&preview.pts.length<2500){preview.pts.push([rx,ry]);
+      sendPresence({ink:{o,p:preview.pts.slice(-160),c:toolStyle.pen.color,w:toolStyle.pen.width}});scheduleRender();}return;}
+  if(drag.mode==='erase'){eraseAt(e);return;}
+  if(drag.mode==='arrow'){const dx=pt.x-preview.x,dy=pt.y-preview.y;let a=Math.atan2(dx,-dy)*180/Math.PI;if(e.shiftKey)a=Math.round(a/15)*15;preview.rot=normRot(a);preview.length=r2(Math.hypot(dx,dy));scheduleRender();return;}
+  if(drag.mode==='box'){preview.x1=pt.x;preview.y1=pt.y;scheduleRender();return;}
+  if(drag.mode==='move'){
+    let dx=pt.x-drag.px,dy=pt.y-drag.py;
+    const nx=snap(drag.ax+dx),ny=snap(drag.ay+dy);dx=nx-drag.ax;dy=ny-drag.ay;
+    const m={};for(const[id,[x,y]]of Object.entries(drag.start)){const d=getDoc('items',id);if(!d)continue;const v={...clone(d),x:r2(x+dx),y:r2(y+dy)};local.items.set(id,v);m[id]=[v.x,v.y];}
+    drag.moved=true;drag.m=m;sendPresence({drag:{s:curSlide,m}});scheduleRender();return;
+  }
+  if(drag.mode==='rot'){const it=getDoc('items',drag.id);if(!it)return;let a=Math.atan2(pt.x-it.x,-(pt.y-it.y))*180/Math.PI;a=e.shiftKey?Math.round(a/15)*15:Math.round(a);
+    local.items.set(it.id,{...clone(it),rot:normRot(a)});drag.moved=true;sendPresence({drag:{s:curSlide,m:{[it.id]:[it.x,it.y,normRot(a)]}}});scheduleRender();return;}
+});
+function endDrag(e){
+  if(!drag)return;const d=drag;drag=null;svg.classList.remove('panning');
+  if(d.mode==='pen'&&preview){
+    const pts=preview.pts.length>1?preview.pts:[[0,0],[.01,0]];
+    const it=make('ink',{x:preview.o[0],y:preview.o[1],pts,color:toolStyle.pen.color,width:toolStyle.pen.width,opacity:toolStyle.pen.opacity});
+    addItem(it,false);preview=null;setTimeout(()=>sendPresence({ink:null}),350);
+  }
+  if(d.mode==='arrow'&&preview){if(preview.length>.5){const it=make('arrow',{x:preview.x,y:preview.y,rot:preview.rot,length:preview.length,width:toolStyle.arrowd.width,color:toolStyle.arrowd.color,opacity:toolStyle.arrowd.opacity,stroke:false});addItem(it,false);}preview=null;}
+  if(d.mode==='box'&&preview){const x0=Math.min(preview.x0,preview.x1),x1=Math.max(preview.x0,preview.x1),y0=Math.min(preview.y0,preview.y1),y1=Math.max(preview.y0,preview.y1);
+    if(x1-x0>.2||y1-y0>.2){const hit=displayItems().filter(it=>{if(it.locked||it.visible===false)return false;let x=it.x,y=it.y;if(it.type==='ink'){const b=inkBBox(it);x=(b.x0+b.x1)/2;y=(b.y0+b.y1)/2;}return x>=x0&&x<=x1&&y>=y0&&y<=y1;}).map(i=>i.id);
+      setSel(d.add?[...new Set([...selIds,...hit])]:hit);}preview=null;}
+  if(d.mode==='erase')endGesture();
+  if(d.mode==='move'||d.mode==='rot'){
+    if(d.moved){for(const id of(d.mode==='move'?Object.keys(d.start):[d.id])){const v=local.items.get(id);if(v)queueWrite('items',id,v);}}
+    endGesture();setTimeout(()=>sendPresence({drag:null}),300);
+  }
+  scheduleRender();
+}
+svg.addEventListener('pointerup',endDrag);svg.addEventListener('pointercancel',endDrag);
+svg.addEventListener('pointerleave',()=>{if(!drag){$('readout').textContent='—';sendPresence({cursor:null});}});
+svg.addEventListener('contextmenu',e=>e.preventDefault());
+svg.addEventListener('dblclick',e=>{
+  if(!canWrite||!curSlide)return;const it=itemAt(e);
+  if(it&&it.type==='text'){openTextEd(it,false);return;}
+  if(!it&&tool==='select'){const pt=toWorld(e);openTextEd(make('text',{x:snap(pt.x),y:snap(pt.y),text:'',color:toolStyle.text.color,size:toolStyle.text.size}),true);}
+});
+svg.addEventListener('wheel',e=>{
+  e.preventDefault();if(!curSlide)return;stopFollow();
+  const p=toWorld(e),f=Math.exp(clamp(e.deltaY,-100,100)*(e.ctrlKey?.01:.0018)),nh=clamp(view.h*f,2,300);
+  view.x=p.x-(p.x-view.x)*nh/view.h;view.y=p.y-(p.y-view.y)*nh/view.h;view.h=nh;sendView();scheduleRender();
+},{passive:false});
+function zoomBy(f){stopFollow();view.h=clamp(view.h*f,2,300);sendView();scheduleRender();}
+$('zIn').onclick=()=>zoomBy(1/1.25);$('zOut').onclick=()=>zoomBy(1.25);$('zFit').onclick=()=>{stopFollow();fitView();sendView();scheduleRender();};
+
+// text editor overlay
+const textEd={open:false,item:null,isNew:false};
+function openTextEd(it,isNew){
+  if(!canWrite)return;
+  textEd.open=true;textEd.item=it;textEd.isNew=isNew;
+  const ta=$('textEd');ta.value=it.text||'';
+  const m=svg.getScreenCTM(),wr=$('wrap').getBoundingClientRect();
+  const fs=Math.max(10,it.size*m.a);ta.style.fontSize=fs+'px';ta.style.color=it.color;
+  const w=Math.max(120,(Math.max(...String(ta.value||'').split('\n').map(l=>l.length),8))*fs*.62+20);
+  ta.style.width=w+'px';ta.style.left=(m.a*it.x+m.e-wr.left-w/2)+'px';
+  ta.rows=Math.max(1,String(ta.value).split('\n').length);ta.style.top=(m.d*it.y+m.f-wr.top-ta.rows*fs*.6-4)+'px';
+  ta.style.display='block';setTimeout(()=>{ta.focus();ta.select();},0);
+  if(!isNew){setSel([it.id]);}
+}
+function closeTextEd(cancel){
+  if(!textEd.open)return;const ta=$('textEd');textEd.open=false;ta.style.display='none';
+  const it=textEd.item,v=ta.value.replace(/\s+$/,'');
+  if(cancel)return;
+  if(textEd.isNew){if(v){addItem({...it,text:v,name:v.split('\n')[0].slice(0,24)||'Text'});setTool('select');}}
+  else if(v!==it.text){if(v)patchItem(it.id,{text:v});else{edit('items',it.id,null);setSel([]);}}
+}
+$('textEd').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();closeTextEd(false);}
+  else if(e.key==='Escape'){e.preventDefault();closeTextEd(true);}
+  e.stopPropagation();
+});
+$('textEd').addEventListener('input',e=>{const ta=e.target;ta.rows=Math.max(1,ta.value.split('\n').length);});
+$('textEd').addEventListener('blur',()=>setTimeout(()=>closeTextEd(false),0));
+
+// keyboard
+document.addEventListener('keydown',e=>{
+  const tag=(e.target.tagName||'').toLowerCase(),typing=['input','textarea','select'].includes(tag)||e.target.isContentEditable;
+  const mod=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
+  if($('modal').classList.contains('on')){if(e.key==='Escape')closeModal();return;}
+  if(mod&&k==='z'&&!typing){e.preventDefault();e.shiftKey?redo():undo();return;}
+  if(mod&&k==='y'&&!typing){e.preventDefault();redo();return;}
+  if(typing)return;
+  if(e.code==='Space'){if(!spaceDown){spaceDown=true;svg.classList.add('panning');}e.preventDefault();return;}
+  if(mod&&k==='c'){copySel();e.preventDefault();return;}
+  if(mod&&k==='v'){if(canWrite)pasteItems();e.preventDefault();return;}
+  if(mod&&k==='d'){e.preventDefault();if(canWrite)duplicateSel();return;}
+  if(mod&&k==='a'){e.preventDefault();setSel(slideItems(curSlide).filter(i=>!i.locked&&i.visible!==false).map(i=>i.id));return;}
+  if(e.key==='PageDown'||e.key==='PageUp'){const s=slidesSorted(),i=s.findIndex(x=>x.id===curSlide),j=i+(e.key==='PageDown'?1:-1);if(s[j])goSlide(s[j].id);e.preventDefault();return;}
+  if(e.key==='Escape'){if(picking||tetherStart){picking=null;tetherStart=null;renderTools();scheduleRender();return;}if(selIds.length)setSel([]);else setTool('select');return;}
+  if(!mod&&TOOLKEYS[k]&&!(k==='e')){setTool(canWrite||['select','hand'].includes(TOOLKEYS[k])?TOOLKEYS[k]:tool);return;}
+  if(!canWrite)return;
+  const its=selItems();if(!its.length)return;
+  const step=(arenaOf(curSlideDoc()).snap||.5)*(e.shiftKey?5:1);
+  const mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+  if(mv){e.preventDefault();its.forEach(it=>patchItem(it.id,{x:r2(it.x+mv[0]*step),y:r2(it.y+mv[1]*step)}));return;}
+  if(k==='q'||k==='e'){its.filter(it=>ROTATABLE.has(it.type)).forEach(it=>patchItem(it.id,{rot:normRot((it.rot||0)+(k==='e'?1:-1)*(e.shiftKey?5:15))}));return;}
+  if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();deleteSel();return;}
+});
+document.addEventListener('keyup',e=>{if(e.code==='Space'){spaceDown=false;svg.classList.remove('panning');}});
+window.addEventListener('blur',()=>{spaceDown=false;svg.classList.remove('panning');});
+window.addEventListener('resize',()=>scheduleRender());
+
+// ================= modals / export =================
+function openModal(html){$('modalBox').innerHTML=html;$('modal').classList.add('on');}
+function closeModal(){$('modal').classList.remove('on');}
+$('modal').addEventListener('click',e=>{if(e.target.id==='modal'||e.target.closest('[data-close]'))closeModal();});
+function confirmBox(msg,label,fn){openModal(`<h2>Are you sure?</h2><p>${msg}</p><div class="btnrow"><button class="pri danger" id="cOk">${label}</button><button data-close>Cancel</button></div>`);$('cOk').onclick=()=>{closeModal();fn();};}
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast('Copied');}catch(e){toast('Copy blocked — select the text and copy it manually');}}
+async function save(filename,data){
+  if(!dl)return false;
+  try{await dl.save({filename,data});return true;}catch(err){if(err&&err.code!=='declined')toast('Download unavailable here — use Copy instead');return 'fail';}
+}
+function boardJSON(){return{format:'ffxiv-board',version:2,slides:slidesSorted().map(clone),items:slidesSorted().flatMap(s=>slideItems(s.id).map(clone))};}
+$('jsonBtn').onclick=()=>{
+  openModal(`<h2>Save / Load</h2>
+    <p class="note">${MODE==='shared'?'This board saves automatically and syncs live for everyone who opens the site.':'Offline mode — this board is saved in this browser only.'} Export a backup below, or import a file to <b>add</b> its slides to this board.</p>
+    <textarea id="jsonTxt" spellcheck="false">${esc(JSON.stringify(boardJSON(),null,1))}</textarea>
+    <div class="btnrow">${dl?'<button class="pri" id="jSave">Download .json</button>':''}<button id="jCopy">Copy JSON</button>
+      ${canWrite?'<button id="jLoad">Import slides from text</button><label class="chk"><input type="file" id="jFile" accept=".json,application/json" style="font-size:12px"></label>':''}
+      <span style="flex:1"></span><button data-close>Close</button></div><p class="note" id="jErr" style="color:var(--danger)"></p>`);
+  $('jCopy').onclick=()=>copyText($('jsonTxt').value);
+  if(dl)$('jSave').onclick=()=>save('ffxiv-board.json',JSON.stringify(boardJSON(),null,1));
+  if(canWrite){
+    const load=txt=>{try{const n=importBoard(JSON.parse(txt));closeModal();toast(`Imported ${n} slide${n===1?'':'s'}`);}catch(err){$('jErr').textContent='Could not import: '+err.message;}};
+    $('jLoad').onclick=()=>load($('jsonTxt').value);
+    $('jFile').onchange=e=>{const f=e.target.files[0];if(f)f.text().then(load);};
+  }
+};
+function importBoard(obj){
+  let slides=[],items=[];
+  if(obj&&Array.isArray(obj.shapes)){const sid='old';slides=[{id:sid,title:obj.arena&&obj.arena.title||'Imported',arena:obj.arena||{}}];items=obj.shapes.map(s=>({...s,slide:sid}));}
+  else if(obj&&Array.isArray(obj.slides)){slides=obj.slides;items=Array.isArray(obj.items)?obj.items:[];}
+  else throw new Error('No slides found in this file');
+  const map={};let order=nextOrder();let first=null;
+  for(const s of slides){if(!s||typeof s!=='object')continue;const id=uid();map[s.id]=id;first=first||id;
+    const ar={...DEFAULT_ARENA,...(s.arena||{})};delete ar.title;
+    edit('slides',id,{id,title:String(s.title||'Imported slide').slice(0,80),order:order++,arena:ar});}
+  const imap={};items.forEach(it=>{if(it&&it.id)imap[it.id]=uid();});
+  let z=1;for(const it of remapRefs(items.filter(it=>it&&DEF[it.type]&&map[it.slide]&&imap[it.id]),imap,()=>false)){const id=imap[it.id];edit('items',id,{stroke:true,visible:true,locked:false,label:'',labelSize:1.5,...clone(DEF[it.type]),...it,id,slide:map[it.slide],z:it.z||z++});}
+  if(first)goSlide(first);
+  return Object.keys(map).length;
+}
+let pngBlob=null;
+function renderPNG(sl,size){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=c.height=size;c.getContext('2d').drawImage(img,0,0,size,size);c.toBlob(b=>res(b),'image/png');};img.onerror=rej;img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(exportSVG(sl,size));});}
+const fname=(sl,i)=>`${String(i+1).padStart(2,'0')}-${(sl.title||'slide').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,40)||'slide'}.png`;
+$('pngBtn').onclick=async()=>{
+  const sl=curSlideDoc();if(!sl)return;const idx=slidesSorted().findIndex(s=>s.id===sl.id);
+  openModal(`<h2>Export</h2>
+    <div class="btnrow" style="align-items:center"><label class="note" style="margin:0">Size</label>
+      <select id="pSize" style="width:auto"><option value="1080">1080 × 1080</option><option value="1440">1440 × 1440</option><option value="2048">2048 × 2048</option><option value="720">720 × 720</option></select>
+      ${dl?'<button class="pri" id="pSave">Download this slide</button><button id="pAll">Download all slides (.zip)</button>':''}<button id="pCopy">Copy image</button><button data-close>Close</button></div>
+    <img id="pImg" alt="Exported slide"><p class="note">${dl?'':'Right-click the image → “Save image as…”, or use Copy image to paste into Discord.'}</p><p class="note" id="pMsg"></p>`);
+  const go=async()=>{pngBlob=await renderPNG(sl,+$('pSize').value);$('pImg').src=URL.createObjectURL(pngBlob);};
+  $('pSize').onchange=go;await go();
+  $('pCopy').onclick=async()=>{try{await navigator.clipboard.write([new ClipboardItem({'image/png':pngBlob})]);toast('Image copied');}catch(e){toast('Copy blocked — right-click the image instead');}};
+  if(dl){
+    $('pSave').onclick=()=>save(fname(sl,idx),pngBlob);
+    $('pAll').onclick=async()=>{
+      $('pMsg').textContent='Rendering slides…';
+      try{await loadJSZip();const zip=new JSZip();const s=slidesSorted();const size=+$('pSize').value;
+        for(let i=0;i<s.length;i++){zip.file(fname(s[i],i),await renderPNG(s[i],size));}
+        const blob=await zip.generateAsync({type:'blob'});$('pMsg').textContent='';await save('ffxiv-board-slides.zip',blob);
+      }catch(e){$('pMsg').textContent='Could not build the zip here.';}
+    };
+  }
+};
+function loadJSZip(){if(window.JSZip)return Promise.resolve();return new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+$('undo').onclick=undo;$('redo').onclick=redo;
+
+// ================= startup =================
+function setReadOnly(ro){canWrite=!ro;if(ro){setTool('select');}
+  const b=$('banner');b.classList.toggle('on',ro&&MODE==='shared');b.textContent='View only — ask the board owner to share it with you as an Editor to make changes.';renderAll();}
+function onSnap(col){return snap=>{
+  server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};return[d.id,{...v,id:d.id}];}));
+  loaded[col]=true;if(!snap.metadata||!snap.metadata.fromCache)clearTimeout(loadTimer),$('banner').classList.toggle('on',!canWrite&&MODE==='shared');
+  if(loaded.slides){$('loading').style.display='none';
+    if(!curSlide||!getDoc('slides',curSlide)){const s=slidesSorted();if(s.length){goSlide(s[0].id,true);return;}else if(curSlide){curSlide=null;renderAll();}}
+  }
+  if(col==='slides')renderSlides();
+  scheduleRender();
+};}
+let loadTimer=null;
+// ---------- standalone (Firebase) adapters ----------
+const BOARD=((location.hash.match(/(?:^#|&)b=([A-Za-z0-9_-]{1,60})/)||[])[1])||DEFAULT_BOARD;
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+function firebaseStore(base){
+  return{
+    set:(col,id,d)=>base.child(col+'/'+id).set(clone(d)),
+    del:(col,id)=>base.child(col+'/'+id).remove(),
+    sub:(col,cb,err)=>{const r=base.child(col);const h=snap=>{const v=snap.val()||{};cb({docs:Object.entries(v).map(([id,d])=>({id,data:()=>d})),metadata:{fromCache:false}});};
+      r.on('value',h,e=>err&&err({code:'unavailable',message:String(e&&e.message)}));return()=>r.off('value',h);},
+  };
+}
+function firebaseRoom(base,tabKey,uidv){
+  const me={};let arr=[],cbs=[],pending=false,last=0,live=false;const ref=base.child('presence/'+tabKey);
+  const write=()=>{pending=false;last=Date.now();if(live)ref.set({...clone(me),_t:firebase.database.ServerValue.TIMESTAMP}).catch(()=>{});};
+  firebase.database().ref('.info/connected').on('value',s=>{live=!!s.val();if(live){ref.onDisconnect().remove();write();}const st=$('status');if(st&&MODE==='shared'&&!live)st.innerHTML='<span class="dot"></span>Reconnecting…';else renderAvatars();});
+  base.child('presence').on('value',s=>{const v=s.val()||{},now=Date.now();
+    arr=Object.entries(v).filter(([k,p])=>p&&typeof p==='object').map(([k,p])=>({peer:k,by:p.uid||k,isMe:k===tabKey||p.uid===uidv,sameTab:k===tabKey,kind:'viewer',guest:false,presence:p,updatedAt:now}));
+    if(!arr.some(p=>p.sameTab))arr.push({peer:tabKey,by:uidv,isMe:true,sameTab:true,kind:'viewer',guest:false,presence:{...me},updatedAt:now});
+    cbs.forEach(f=>f({peers:arr}));});
+  return{
+    presence(patch){for(const[k,v]of Object.entries(patch)){if(v===null||v===undefined)delete me[k];else me[k]=v;}
+      if(!pending){pending=true;setTimeout(write,Math.max(0,50-(Date.now()-last)));}return Promise.resolve();},
+    onPeers(f){cbs.push(f);setTimeout(()=>f({peers:arr}));return()=>{cbs=cbs.filter(x=>x!==f);};},
+    peers:()=>arr,connected:()=>live,
+  };
+}
+const browserDownloads={save:async({filename,data})=>{const blob=data instanceof Blob?data:new Blob([data]);const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),8000);return{status:'saved'};}};
+let myName=lsGet('ffxiv-board-name')||'';
+function askName(first){
+  openModal(`<h2>${first?'Welcome to the board':'Change your name'}</h2><p class="note">Your name and cursor are shown to teammates on the board.</p>
+    <div class="row two"><label>Your name</label><input type="text" id="nmIn" maxlength="24" value="${esc(myName)}" placeholder="e.g. Anthony"></div>
+    <div class="btnrow"><button class="pri" id="nmOk">${first?'Join board':'Save'}</button>${first?'':'<button data-close>Cancel</button>'}</div>`);
+  const ok=()=>{const v=$('nmIn').value.trim().slice(0,24);if(!v){$('nmIn').focus();return;}myName=v;lsSet('ffxiv-board-name',v);sendPresence({name:v});closeModal();renderAvatars();};
+  $('nmOk').onclick=ok;$('nmIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>$('nmIn').focus(),30);
+}
+async function init(){
+  updUndo();renderTools();updStatus(0);
+  dl=browserDownloads;
+  myId=lsGet('ffxiv-board-uid');if(!myId){myId='u'+uid();lsSet('ffxiv-board-uid',myId);}
+  const configured=window.firebase&&FIREBASE_CONFIG&&FIREBASE_CONFIG.databaseURL;
+  if(configured){
+    try{firebase.initializeApp(FIREBASE_CONFIG);const base=firebase.database().ref('boards/'+BOARD);
+      store=firebaseStore(base);room=firebaseRoom(base,'t'+uid(),myId);MODE='shared';}
+    catch(e){console.error(e);store=localStore();MODE='local';room=null;}
+  } else {store=localStore();MODE='local';room=null;}
+  if(MODE==='shared'&&!myName)setTimeout(()=>askName(true),300);
+  if(MODE==='local'&&store.isEmpty()){seedLocal();}
+  loadTimer=setTimeout(()=>{if(MODE==='shared'){const b=$('banner');b.textContent='Can’t reach the shared board yet — showing what’s cached. It will update when the connection returns.';b.classList.add('on');$('loading').style.display='none';}},10000);
+  const err=e=>{if(e&&e.code==='revoked'){setReadOnly(true);}else toast('Lost connection to the shared board — reload to reconnect.');};
+  store.sub('slides',onSnap('slides'),err);store.sub('items',onSnap('items'),err);
+  if(!canWrite)setReadOnly(true);
+  if(room){
+    sendPresence({uid:myId,name:myName||'',color:myColor(),slide:curSlide,sel:[],cursor:null});
+    room.onPeers(ch=>{peers=ch.peers.slice();resolveNames();if(following)applyFollow();renderAvatars();scheduleRender();scheduleThumbs();},()=>{});
+  }
+  updStatus(0);renderAll();
+}
+function seedLocal(){
+  const sid='demo';const A={...DEFAULT_ARENA};
+  store.set('slides',sid,{id:sid,title:'Slide 1',order:1,arena:A});
+  let z=1;const put=(type,extra)=>{const id=uid();store.set('items',id,{id,slide:sid,type,x:100,y:100,z:z++,stroke:true,visible:true,locked:false,label:'',labelSize:1.5,...clone(DEF[type]),...extra});};
+  const P=(d,a)=>({x:r2(100+d*Math.sin(a*Math.PI/180)),y:r2(100-d*Math.cos(a*Math.PI/180))});
+  [['A',0],['1',45],['B',90],['2',135],['C',180],['3',225],['D',270],['4',315]].forEach(([m,a])=>put('waymark',{mark:m,name:'Waymark '+m,...P(15,a)}));
+  put('cone',{name:'Frontal cleave',rot:180});put('boss',{});
+}
+init();
+</script>
+</body>
+</html>
