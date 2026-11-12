@@ -151,7 +151,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v11</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v12</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -867,6 +867,7 @@ function buildInsp(){
           return `<li data-lsel="${s.id}" class="${s.auto&&distOf(s)?'dist-'+distOf(s):''}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span>${s.auto?distBadge(s):''}<span class="ty">${s.auto?fmtT((s.at||t0)-t0):s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'} (or middle-click the row)">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
         :'<li class="note" style="cursor:default">Nothing on this slide yet — pick a tool on the left.</li>'}</ul></div>`;
     if(isPull(sl)){const pb=sp.querySelector('[data-pb]'),ly=sp.querySelector('#layers');if(pb&&ly){const lys=ly.closest('.sect');sp.prepend(lys);sp.prepend(pb);lys.style.marginTop='12px';}}
+    else{const ly=sp.querySelector('#layers'),fs=sp.querySelector('fieldset'),ar=fs&&fs.querySelector(':scope > .sect');if(ly&&ar)fs.insertBefore(ly.closest('.sect'),ar);}
     sp.scrollTop=spTop;
   }
   insp.classList.toggle('item',its.length>0);
