@@ -58,7 +58,7 @@ main{display:grid;grid-template-columns:52px auto 1fr auto;height:calc(100vh - 5
 .evinfo b{color:var(--dim);font-weight:500}
 .dbadge{flex:none;display:inline-block;font:700 9.5px Inter;border-radius:4px;padding:1px 5px;margin-left:5px;letter-spacing:.03em;vertical-align:1px;white-space:nowrap}
 .dbadge.near{background:#ffd43b;color:#1a1200}.dbadge.far{background:#c77dff;color:#16052a}
-#layers li.dist-near{box-shadow:inset 3px 0 0 #ffd43b}#layers li.dist-far{box-shadow:inset 3px 0 0 #c77dff}
+ul.layers li.dist-near{box-shadow:inset 3px 0 0 #ffd43b}ul.layers li.dist-far{box-shadow:inset 3px 0 0 #c77dff}
 .flipbtn{padding:1px 7px;font:500 11px Inter;letter-spacing:0;text-transform:none;margin-left:6px}
 #slideList{flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:8px}
 .sl{content-visibility:auto;contain-intrinsic-size:auto 190px;position:relative;border:1px solid var(--line);border-radius:8px;padding:5px;cursor:pointer;background:var(--panel)}
@@ -82,7 +82,7 @@ aside.right{background:var(--panel);display:flex;padding:0;overflow:visible;posi
 #insp.item #itemPane{display:block;animation:paneIn .14s ease-out}
 @keyframes paneIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 #itemPane .closeItem{position:absolute;top:8px;right:8px;padding:2px 8px;font-size:13px;line-height:18px;background:transparent}
-#layers li.on{background:#16295a;outline:1px solid #2d5bb0}
+ul.layers li.on{background:#16295a;outline:1px solid #2d5bb0}
 h2{font:600 13px Rajdhani,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:4px 0 8px}
 .stagewrap{position:relative;min-width:0;min-height:0;overflow:hidden;background:radial-gradient(circle at 50% 45%,#0e1a3d 0,#070d1f 70%)}
 #stage{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;display:block}
@@ -136,14 +136,14 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 .btnrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .sect{border-top:1px solid var(--line);margin-top:12px;padding-top:8px}
 .note{color:var(--dim);font-size:11.5px;margin:4px 0}
-#layers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-#layers li{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:6px;cursor:pointer}
-#layers li:hover{background:#13214a}
-#layers .sw{width:11px;height:11px;border-radius:3px;flex:none;border:1px solid rgba(255,255,255,.3)}
-#layers .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#layers .ty{color:var(--dim);font-size:11px}
-#layers .ib{padding:1px 5px;font-size:11px;border-radius:4px;background:transparent;border-color:transparent;color:var(--dim)}
-#layers .ib.act{color:var(--accent)}
+ul.layers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+ul.layers li{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:6px;cursor:pointer}
+ul.layers li:hover{background:#13214a}
+ul.layers .sw{width:11px;height:11px;border-radius:3px;flex:none;border:1px solid rgba(255,255,255,.3)}
+ul.layers .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ul.layers .ty{color:var(--dim);font-size:11px}
+ul.layers .ib{padding:1px 5px;font-size:11px;border-radius:4px;background:transparent;border-color:transparent;color:var(--dim)}
+ul.layers .ib.act{color:var(--accent)}
 .modal{position:fixed;inset:0;background:rgba(3,6,16,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
 .modal.on{display:flex}
 .modal .box{background:var(--panel);border:1px solid #2d5bb0;border-radius:12px;padding:16px;max-width:760px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 0 40px rgba(95,211,255,.15)}
@@ -173,7 +173,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v21</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v22</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -1041,6 +1041,10 @@ function buildInsp(){
   const A=arenaOf(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   {
     const items=slideItems(curSlide);
+    const isUnit=t=>t==='marker'||t==='waymark'||t==='boss';
+    const rowsHTML=(L,empty)=>L.length?(isPull(sl)&&!newestFirst?[...L].sort((a,b)=>((a.at||0)-(b.at||0))||((a.z||0)-(b.z||0))):isPull(sl)?[...L].sort((a,b)=>((b.at||0)-(a.at||0))||((b.z||0)-(a.z||0))):[...L].reverse()).map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
+          const t0=pullT0(items),on=s.auto?!!s.pinned:s.visible!==false;
+          return `<li data-lsel="${s.id}" class="${s.auto&&distOf(s)?'dist-'+distOf(s):''}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span>${s.auto?distBadge(s):''}<span class="ty">${s.auto?fmtT((s.at||t0)-t0):s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'} (or middle-click the row)">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join(''):`<li class="note" style="cursor:default">${empty}</li>`;
     sp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>Slide</h2>${txtRow('title','Slide title','data-st')}
       <div class="chks">${chk('showTitle','Show title on arena','data-a')}${chk('anim','Animated slide (timeline)','data-st')}</div>
       ${sl.anim?numRow('animLen','Length (s)',1,1,180,'data-st')+numRow('moveSpeed','Move speed (y/s)',.5,0,12,'data-st')+'<p class="note">Length 0 = automatic. Move speed 6 = in-game run speed; 0 = players arrive exactly at each waypoint’s time.</p>':''}
@@ -1070,11 +1074,8 @@ function buildInsp(){
       <div class="btnrow"><button data-act="resetArena">Reset arena look</button></div></div></fieldset>
       ${isPull(sl)?`<div class="sect" data-pb style="margin-top:0;border-top:0;padding-top:0"><h2>Pull playback</h2><p class="note">Attacks from the game show for a few seconds when they arrive, then hide. Click ● in the list to keep one showing, or click its name to flash it.</p>
         <div class="btnrow"><button class="pri" data-act="replay">▶ Replay pull</button><button data-act="stopReplay">■ Stop</button><button data-act="showAll">Show all</button><button data-act="hideAll">Hide all</button></div></div>`:''}
-      <div class="sect"><h2>${isPull(sl)?'Attacks &amp; layers':'Layers'} <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(top = ${isPull(sl)?(newestFirst?'latest':'earliest'):'in front'})</span>${isPull(sl)?`<button class="flipbtn" data-act="flipOrder" title="Flip the timeline order">${newestFirst?'⇅ Oldest first':'⇅ Newest first'}</button>`:''}</h2><ul id="layers">${
-        items.length?(isPull(sl)&&!newestFirst?[...items].sort((a,b)=>((a.at||0)-(b.at||0))||((a.z||0)-(b.z||0))):isPull(sl)?[...items].sort((a,b)=>((b.at||0)-(a.at||0))||((b.z||0)-(a.z||0))):[...items].reverse()).map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
-          const t0=pullT0(items),on=s.auto?!!s.pinned:s.visible!==false;
-          return `<li data-lsel="${s.id}" class="${s.auto&&distOf(s)?'dist-'+distOf(s):''}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span>${s.auto?distBadge(s):''}<span class="ty">${s.auto?fmtT((s.at||t0)-t0):s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'} (or middle-click the row)">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join('')
-        :'<li class="note" style="cursor:default">Nothing on this slide yet — pick a tool on the left.</li>'}</ul></div>`;
+      <div class="sect"><h2>${isPull(sl)?'Attacks &amp; shapes':'Shapes'} <span style="color:var(--dim);letter-spacing:0;font:500 11px Inter">(top = ${isPull(sl)?(newestFirst?'latest':'earliest'):'in front'})</span>${isPull(sl)?`<button class="flipbtn" data-act="flipOrder" title="Flip the timeline order">${newestFirst?'⇅ Oldest first':'⇅ Newest first'}</button>`:''}</h2><ul id="layers" class="layers">${
+        rowsHTML(items.filter(i=>!isUnit(i.type)),'No shapes yet — pick a tool on the left.')}</ul><h2 style="margin-top:12px">Players &amp; markers</h2><ul class="layers" id="units">${rowsHTML(items.filter(i=>isUnit(i.type)),'No players or waymarks yet.')}</ul></div>`;
     if(isPull(sl)){const pb=sp.querySelector('[data-pb]'),ly=sp.querySelector('#layers');if(pb&&ly){const lys=ly.closest('.sect');sp.prepend(lys);sp.prepend(pb);lys.style.marginTop='12px';}}
     else{const ly=sp.querySelector('#layers'),fs=sp.querySelector('fieldset'),ar=fs&&fs.querySelector(':scope > .sect');if(ly&&ar)fs.insertBefore(ly.closest('.sect'),ar);}
     sp.scrollTop=spTop;
@@ -1086,9 +1087,12 @@ function buildInsp(){
     ip.innerHTML=closeBtn+`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>${its.length} items selected</h2>
       <div class="row two"><label>Color</label><input type="color" data-multi="color" value="${its[0].color||'#ffffff'}"></div>
       <div class="swatches">${SWATCHES.map(c=>`<button data-sw="${c}" style="background:${c}"></button>`).join('')}</div>
-      <div class="row"><label>Opacity</label><input type="range" data-multi="opacity" min="0" max="1" step=".05" value="${its[0].opacity??1}"><span></span></div>
+      ${numRow('opacity','Opacity',.05,0,1,'data-multi')}
+      ${(()=>{const sets=its.map(i=>new Set((FIELDS[i.type]||[]).filter(f=>f.t==='num').map(f=>f.k)));const first=(FIELDS[its[0].type]||[]).filter(f=>f.t==='num'&&sets.every(st=>st.has(f.k)));
+        return first.length?`<div class="sect"><h2>Shared settings</h2>${first.map(f=>numRow(f.k,f.l,f.step,f.min,f.max,'data-multi')).join('')}<p class="note">Blank = the selected items differ. Typing a value sets it on all of them.</p></div>`:'';})()}
+      <div class="btnrow"><button data-act="mHide">Hide all</button><button data-act="mShow">Show all</button><button data-act="mLock">Lock</button><button data-act="mUnlock">Unlock</button></div>
       <div class="btnrow"><button data-act="dup">Duplicate</button><button data-act="copy">Copy</button><button data-act="del" class="danger">Delete</button><button data-act="deselect">Done</button></div>
-      <p class="note">Layers: AoEs draw under waymarks, which draw under players, arrows, pen and text. Drag any selected item to move them together. Shift-click to add or remove items.</p></fieldset>`;
+      <p class="note">Layers: AoEs draw under waymarks, which draw under players, arrows, pen and text. Drag any selected item to move them together. Ctrl- or Shift-click shapes (or list rows) to add or remove them; Shift-click in a list selects a range.</p></fieldset>`;
   } else {
     const s=its[0];
     const aimed=!!(s.target&&!s.attach&&ROTATABLE.has(s.type)&&getDoc('items',s.target));
@@ -1134,7 +1138,9 @@ function syncInsp(except,force){
   const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
-  insp.querySelectorAll('#layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
+  insp.querySelectorAll('ul.layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
+  if(its.length>1)insp.querySelectorAll('[data-multi]').forEach(el=>{if(el===act&&!force)return;const k=el.dataset.multi;const vals=its.map(i=>i[k]);const same=vals.every(v=>v===vals[0]);
+    if(el.type==='color'){if(same&&vals[0])el.value=vals[0];return;}const nv=same&&vals[0]!==undefined?String(+(+vals[0]).toFixed(2)):'';if(el.value!==nv)el.value=nv;if(el.type==='number')el.placeholder=same?'':'mixed';});
   insp.querySelectorAll('[data-roster]').forEach(el=>{if(el!==act||force){const v=rosterMap()[el.dataset.roster]||'';if(el.value!==v)el.value=v;}});
   insp.querySelectorAll('[data-showjobs]').forEach(el=>{el.checked=showJobs();});
   if(s){const ks=sortedKeys(s.keys);insp.querySelectorAll('[data-kf]').forEach(el=>{if(el===act&&!force)return;const[i,f]=el.dataset.kf.split(':');const k=ks[+i];if(k){const nv=String(+(+k[f]).toFixed(2));if(el.value!==nv)el.value=nv;}});
@@ -1150,6 +1156,7 @@ function syncInsp(except,force){
 }
 function readVal(el){if(el.type==='checkbox')return el.checked;if(el.type==='number'||el.type==='range'){const v=parseFloat(el.value);return isNaN(v)?null:v;}return el.value;}
 function fmtT(ms){ms=Math.max(0,Math.round(ms||0));const m=Math.floor(ms/60000),sec=Math.floor(ms/1000)%60,r=ms%1000;return `${m}:${String(sec).padStart(2,'0')}:${String(r).padStart(3,'0')}`;}
+let lastLsel=null;
 function pullT0(items){const a=items.filter(i=>i.auto&&i.at).map(i=>i.at);const sl=curSlideDoc();return sl&&sl.startedAt?sl.startedAt:(a.length?Math.min(...a):0);}
 const insp=$('insp');
 insp.addEventListener('input',e=>{
@@ -1179,14 +1186,18 @@ insp.addEventListener('input',e=>{
 insp.addEventListener('change',e=>{endGesture();if(e.target.dataset.k==='track'||e.target.dataset.st==='anim'||e.target.dataset.k==='tele'||e.target.dataset.k==='hit')setTimeout(buildInsp);if(e.target.dataset.st==='anim'){playT=0;playing=false;renderTimeline();}if(e.target.dataset.a==='shape'||e.target.dataset.ap&&e.target.dataset.ap.endsWith(':cut')||e.target.dataset.a==='radius'||e.target.dataset.a==='margin')buildInsp();if(e.target.dataset.k==='name'||e.target.dataset.k==='visible'||e.target.dataset.k==='locked')buildInsp();});
 insp.addEventListener('focusout',e=>{endGesture();if(e.target&&e.target.type==='number')setTimeout(()=>syncInsp(null,true));});
 // middle-click a row in the attack/layer list = same as its show/hide dot
-insp.addEventListener('mousedown',e=>{if(e.button===1&&e.target.closest('[data-lsel]'))e.preventDefault();});
+insp.addEventListener('mousedown',e=>{if((e.button===1||e.shiftKey)&&e.target.closest('[data-lsel]'))e.preventDefault();});
 insp.addEventListener('auxclick',e=>{if(e.button!==1)return;const li=e.target.closest('[data-lsel]');if(!li||!canWrite)return;e.preventDefault();
   const it=getDoc('items',li.dataset.lsel);if(!it)return;if(it.auto)patchItem(it.id,{pinned:!it.pinned,visible:true});else patchItem(it.id,{visible:it.visible===false});setTimeout(buildInsp);});
 insp.addEventListener('click',e=>{
   const sw=e.target.closest('[data-sw]');if(sw){selItems().forEach(it=>patchItem(it.id,{color:sw.dataset.sw}));return;}
   const v=e.target.closest('[data-vis]');if(v){const it=getDoc('items',v.dataset.vis);if(it){if(it.auto)patchItem(it.id,{pinned:!it.pinned,visible:true});else patchItem(it.id,{visible:it.visible===false});}setTimeout(buildInsp);return;}
   const l=e.target.closest('[data-lock]');if(l){const it=getDoc('items',l.dataset.lock);if(it)patchItem(it.id,{locked:!it.locked});setTimeout(buildInsp);return;}
-  const li=e.target.closest('[data-lsel]');if(li){const it=getDoc('items',li.dataset.lsel);if(it&&it.auto)autoSeen.set(it.id,Date.now());setSel([li.dataset.lsel]);return;}
+  const li=e.target.closest('[data-lsel]');if(li){const id=li.dataset.lsel,it=getDoc('items',id);
+    if(e.ctrlKey||e.metaKey){setSel(selIds.includes(id)?selIds.filter(x=>x!==id):[...selIds,id]);lastLsel=id;return;}
+    if(e.shiftKey&&lastLsel){const rows=[...li.parentElement.querySelectorAll('[data-lsel]')].map(r=>r.dataset.lsel);const i0=rows.indexOf(lastLsel),i1=rows.indexOf(id);
+      if(i0>=0&&i1>=0){const rng=rows.slice(Math.min(i0,i1),Math.max(i0,i1)+1);setSel([...new Set([...selIds,...rng])]);return;}}
+    if(it&&it.auto)autoSeen.set(it.id,Date.now());lastLsel=id;setSel([id]);return;}
   const pk=e.target.closest('[data-pick]');if(pk&&selIds.length===1){picking={id:selIds[0],field:pk.dataset.pick};renderTools();toast('Click a player or item on the arena (Esc to cancel)');return;}
   const one=selItems()[0];
   const hd=e.target.closest('[data-head]');if(hd&&one){patchItem(one.id,{head:hd.dataset.head||null});setTimeout(buildInsp);return;}
@@ -1215,6 +1226,10 @@ function action(a){
       [['tank','MT',0],['tank','OT',90],['healer','H1',270],['healer','H2',180],['dps','M1',225],['dps','M2',135],['dps','R1',315],['dps','R2',45]].forEach(([role,t,an])=>{const it=make('marker',{role,text:t,name:t,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
     case'deselect':setSel([]);return;
     case'jobIcons':jobIconsBox();return;
+    case'mHide':selItems().forEach(it=>it.auto?patchItem(it.id,{pinned:false}):patchItem(it.id,{visible:false}));setTimeout(buildInsp);return;
+    case'mShow':selItems().forEach(it=>it.auto?patchItem(it.id,{pinned:true,visible:true}):patchItem(it.id,{visible:true}));setTimeout(buildInsp);return;
+    case'mLock':selItems().forEach(it=>patchItem(it.id,{locked:true}));setTimeout(buildInsp);return;
+    case'mUnlock':selItems().forEach(it=>patchItem(it.id,{locked:false}));setTimeout(buildInsp);return;
     case'mvAdd':{const s1=selItems()[0];if(!s1)return;picking={id:s1.id,field:'move',t:r2(playT)};renderTools();toast(`Click the arena where it should go at ${fmtT(playT*1000)} (Esc to cancel)`);return;}
     case'kfAdd':{const s1=selItems()[0];if(!s1)return;const d=displayItems().find(i=>i.id===s1.id)||s1;edit('items',s1.id,withKey(clone(s1),playT,d.x,d.y));setTimeout(buildInsp);return;}
     case'kfClear':{const s1=selItems()[0];if(!s1)return;const d=displayItems().find(i=>i.id===s1.id)||s1;patchItem(s1.id,{keys:null,x:d.x,y:d.y});setTimeout(buildInsp);return;}
@@ -1271,9 +1286,10 @@ svg.addEventListener('pointerdown',e=>{
   if(DEF[tool]){const extra={x:snap(pt.x),y:snap(pt.y)};const it=make(tool,extra);if(tool==='marker'){}addItem(it);setTool('select');drag=null;return;}
   // select tool
   if(e.target.closest('[data-handle]')&&selIds.length===1){const it=getDoc('items',selIds[0]);beginGesture();touch('items',it.id);drag={mode:'rot',id:it.id,moved:false};return;}
-  const it=e.shiftKey?itemAt(e):itemAtPreferSel(e);
+  const addKey=e.shiftKey||e.ctrlKey||e.metaKey;
+  const it=addKey?itemAt(e):itemAtPreferSel(e);
   if(it){
-    if(e.shiftKey){setSel(selIds.includes(it.id)?selIds.filter(x=>x!==it.id):[...selIds,it.id]);drag=null;return;}
+    if(addKey){setSel(selIds.includes(it.id)?selIds.filter(x=>x!==it.id):[...selIds,it.id]);drag=null;return;}
     if(!selIds.includes(it.id))setSel([it.id]);
     const dmap=new Map(displayItems().map(i=>[i.id,i]));
     const start={};selItems().forEach(s=>{if(!s.locked&&s.type!=='tether'&&!(s.target&&s.attach&&getDoc('items',s.target))){const dd=dmap.get(s.id)||s;start[s.id]=[dd.x,dd.y];}});
@@ -1281,8 +1297,8 @@ svg.addEventListener('pointerdown',e=>{
     beginGesture();Object.keys(start).forEach(id=>touch('items',id));
     drag={mode:'move',px:pt.x,py:pt.y,start,ax:itd.x,ay:itd.y,moved:false,anim:isAnimSlide()};
   } else {
-    if(!e.shiftKey&&selIds.length)setSel([]);
-    preview={kind:'box',x0:pt.x,y0:pt.y,x1:pt.x,y1:pt.y};drag={mode:'box',add:e.shiftKey};
+    if(!addKey&&selIds.length)setSel([]);
+    preview={kind:'box',x0:pt.x,y0:pt.y,x1:pt.x,y1:pt.y};drag={mode:'box',add:addKey};
   }
 });
 function eraseAt(e){
