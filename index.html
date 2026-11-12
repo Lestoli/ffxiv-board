@@ -161,7 +161,7 @@ input[type=color]{width:100%;height:28px;border:1px solid var(--line);border-rad
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v15</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v16</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -224,6 +224,12 @@ const ROLE_COL={tank:'#2f6fe0',healer:'#2e9e4f',dps:'#c8343a',other:'#7d7d8a'};
 const WM_COL={A:'#ff5a5a',B:'#ffd43b',C:'#4dabff',D:'#c77dff','1':'#ff5a5a','2':'#ffd43b','3':'#4dabff','4':'#c77dff'};
 const SWATCHES=['#ff8a2b','#ff3b3b','#ffd43b','#4dff88','#4dabff','#b46bff','#ff5fd2','#ffffff','#202020'];
 const PEER_COLS=['#ff6b6b','#ffd43b','#4dff88','#4dabff','#c77dff','#ff9f43','#2ee6d6','#ff5fd2'];
+const JOBS=[['PLD','tank','Paladin'],['WAR','tank','Warrior'],['DRK','tank','Dark Knight'],['GNB','tank','Gunbreaker'],
+  ['WHM','healer','White Mage'],['SCH','healer','Scholar'],['AST','healer','Astrologian'],['SGE','healer','Sage'],
+  ['MNK','dps','Monk'],['DRG','dps','Dragoon'],['NIN','dps','Ninja'],['SAM','dps','Samurai'],['RPR','dps','Reaper'],['VPR','dps','Viper'],
+  ['BRD','dps','Bard'],['MCH','dps','Machinist'],['DNC','dps','Dancer'],['BLM','dps','Black Mage'],['SMN','dps','Summoner'],['RDM','dps','Red Mage'],['PCT','dps','Pictomancer'],['BLU','dps','Blue Mage']];
+const JOB_ROLE=Object.fromEntries(JOBS.map(j=>[j[0],j[1]]));
+const ROSTER_SLOTS=['MT','OT','H1','H2','M1','M2','R1','R2'];
 const AOE=new Set(['circle','donut','rect','cone','cross','star','arrow','tower','boss']);
 const TARGETABLE=new Set(['circle','donut','rect','cone','cross','star','arrow','tower','boss','text']);
 const ROTATABLE=new Set(['rect','cone','cross','star','arrow','boss','text']);
@@ -261,7 +267,7 @@ const FIELDS={
   arrow:[N('width','Shaft width',.1,.1,5),N('length','Length',.5,0,50),ROT],
   tower:[N('radius','Radius',.5,0,20),N('count','Soak count',1,0,8)],
   boss:[N('radius','Hitbox radius',.5,0,30),N('rot','Facing °',1,-180,180)],
-  marker:[S('role','Role',[['tank','Tank'],['healer','Healer'],['dps','DPS'],['other','Other']]),T('text','Label'),N('size','Size',.1,.3,4)],
+  marker:[S('role','Role',[['tank','Tank'],['healer','Healer'],['dps','DPS'],['other','Other']]),T('text','Label'),S('job','Job',[['','From team jobs (by label)'],...JOBS.map(j=>[j[0],j[0]+' — '+j[2]])]),N('size','Size',.1,.3,4)],
   waymark:[S('mark','Mark',['A','B','C','D','1','2','3','4'].map(m=>[m,m])),N('size','Size',.1,.3,5)],
   text:[TA('text','Text'),N('size','Font size',.1,.3,10),ROT,C('boxed','Dark box behind text')],
   ink:[N('width','Thickness',.05,.05,3)],
@@ -304,9 +310,9 @@ function hashCol(s){let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))|0;
 
 // ================= data layer =================
 let store=null, MODE='loading', canWrite=true, myId=null, userNS=null, room=null, dl=null;
-const server={slides:new Map(),items:new Map(),fights:new Map()};
-const local={slides:new Map(),items:new Map(),fights:new Map()};
-const loaded={slides:false,items:false,fights:false};
+const server={slides:new Map(),items:new Map(),fights:new Map(),meta:new Map()};
+const local={slides:new Map(),items:new Map(),fights:new Map(),meta:new Map()};
+const loaded={slides:false,items:false,fights:false,meta:false};
 const KEY='ffxiv-board-v2', CLIPKEY='ffxiv-board-clip';
 
 function remoteStore(db){
@@ -317,9 +323,9 @@ function remoteStore(db){
   };
 }
 function localStore(){
-  let data={slides:{},items:{},fights:{}};
-  try{const j=JSON.parse(localStorage.getItem(KEY));if(j&&j.slides&&j.items)data={fights:{},...j};}catch(e){}
-  const subs={slides:[],items:[],fights:[]};
+  let data={slides:{},items:{},fights:{},meta:{}};
+  try{const j=JSON.parse(localStorage.getItem(KEY));if(j&&j.slides&&j.items)data={fights:{},meta:{},...j};}catch(e){}
+  const subs={slides:[],items:[],fights:[],meta:[]};
   const emit=col=>{const docs=Object.entries(data[col]).map(([id,d])=>({id,data:()=>d}));subs[col].forEach(cb=>cb({docs,metadata:{fromCache:false}}));};
   const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){}};
   return {
@@ -492,6 +498,13 @@ function tetherSVG(s,live,k){
   if(s.label)o+=`<text x="${r2((ax+bx)/2)}" y="${r2((ay+by)/2+(s.distSize||1.1)*1.5)}" font-size="${s.labelSize||1.2}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${(s.labelSize||1.2)*.12}" paint-order="stroke">${esc(s.label)}</text>`;
   return o;
 }
+// team jobs: board-wide label -> job map, uploaded icons, and the show-jobs switch
+function metaDoc(id){return getDoc('meta',id)||{};}
+function rosterMap(){const m=metaDoc('roster').map;return m&&typeof m==='object'?m:{};}
+function iconMap(){const m=metaDoc('icons').map;return m&&typeof m==='object'?m:{};}
+const showJobs=()=>!!metaDoc('roster').showJobs;
+function markerJob(s){const j=s.job||rosterMap()[String(s.text||'').trim().toUpperCase()]||'';return JOB_ROLE[j]?j:'';}
+let _svgPre='L';
 function textBox(s){const lines=String(s.text||'').split('\n');const z=Math.max(.1,s.size);const w=Math.max(...lines.map(l=>l.length),1)*z*.58+z*.8, h=lines.length*z*1.2+z*.5;return{lines,w,h,z};}
 
 function shapeBody(s,live){
@@ -510,7 +523,11 @@ function shapeBody(s,live){
         (s.count>0?`<text font-size="${Math.max(.6,r*.75)}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${r*.06}" paint-order="stroke">${s.count}</text>`:'');}
     case'boss':{const r=Math.max(0,s.radius);
       return `<circle r="${r}" fill="${s.color}" fill-opacity="${s.opacity}" stroke="${s.color}" stroke-width="0.2"/><circle r="${r}" fill="none" stroke="#fff" stroke-width="0.05" stroke-opacity=".5" stroke-dasharray="0.4 0.4"/><polygon points="0,${-r-1.5} -1,${-r-.1} 1,${-r-.1}" fill="${s.color}" stroke="#fff" stroke-width="0.08"/>`;}
-    case'marker':{const z=Math.max(.1,s.size),c=ROLE_COL[s.role]||ROLE_COL.other;
+    case'marker':{const z=Math.max(.1,s.size),job=markerJob(s),c=ROLE_COL[job?JOB_ROLE[job]:s.role]||ROLE_COL.other;
+      if(job&&showJobs()){const ic=iconMap()[job];
+        if(typeof ic==='string'&&ic.startsWith('data:image/')){const cid=_svgPre+'j'+s.id,r=z*.9;
+          return `<g opacity="${s.opacity}"><circle r="${z}" fill="#0a1028" stroke="${c}" stroke-width="${z*.16}"/><clipPath id="${cid}"><circle r="${r}"/></clipPath><image href="${ic}" x="${-r}" y="${-r}" width="${2*r}" height="${2*r}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${cid})"/></g>`;}
+        return `<g opacity="${s.opacity}"><circle r="${z}" fill="#0a1028" stroke="${c}" stroke-width="${z*.18}"/><text font-size="${z*.62}" font-family="${FONT}" font-weight="800" fill="${c}" text-anchor="middle" dominant-baseline="central" style="filter:brightness(1.5)">${job}</text></g>`;}
       return `<g opacity="${s.opacity}"><circle r="${z}" fill="${c}" stroke="#fff" stroke-width="${z*.12}"/><text font-size="${z*(String(s.text).length>2?.7:.85)}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(s.text)}</text></g>`;}
     case'waymark':{const z=Math.max(.1,s.size),c=WM_COL[s.mark]||'#fff',num=/\d/.test(s.mark);
       const base=num?`<rect x="${-z}" y="${-z}" width="${2*z}" height="${2*z}" rx="${z*.15}"`:`<circle r="${z}"`;
@@ -556,6 +573,7 @@ function buildSlideSVG(sl,items,o){
   if(A.cardinals){const d=B.in+A.margin*.5,fs=Math.min(1.8,A.margin*.55);
     [['N',0,-1],['E',1,0],['S',0,1],['W',-1,0]].forEach(([t,x,y])=>{s+=`<text x="${B.cx+x*d}" y="${B.cy+y*d}" font-size="${fs}" font-family="${FONT}" font-weight="700" fill="${A.edge}" fill-opacity=".85" text-anchor="middle" dominant-baseline="central">${t}</text>`;});}
   if(A.showTitle&&sl&&sl.title&&!o.thumb)s+=`<text x="${bx0+.8}" y="${by0+.8}" font-size="${Math.min(1.2,A.margin*.32)}" font-family="${FONT}" font-weight="700" fill="#fff" dominant-baseline="hanging">${esc(sl.title)}</text>`;
+  _svgPre=o.pre;
   for(const it of resolveTargets(items)){if(it.visible===false||(it.auto&&!autoShown(it)))continue;s+=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));}
   return s;
 }
@@ -762,6 +780,27 @@ function slideMenu(sid,rect){
       del:()=>confirmBox(`Delete “${esc((getDoc('slides',sid)||{}).title||'this slide')}” for everyone? You can undo with Ctrl+Z.`,'Delete slide',()=>delSlide(sid))})[a.dataset.m]();};
 }
 function closeMenu(){const m=$('menu');if(m)m.remove();}
+function jobPreview(j,size){const ic=iconMap()[j],c=ROLE_COL[JOB_ROLE[j]];
+  return ic?`<img src="${ic}" alt="${j}" style="width:${size}px;height:${size}px;border-radius:50%;border:2px solid ${c};object-fit:cover;background:#0a1028">`
+    :`<span style="display:inline-flex;width:${size}px;height:${size}px;border-radius:50%;border:2px solid ${c};align-items:center;justify-content:center;font:800 ${size*.3}px Inter;color:${c};background:#0a1028">${j}</span>`;}
+function resizeIcon(file){return new Promise((res,rej)=>{const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{const N=72,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d'),s=Math.min(img.width,img.height);
+  x.drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,N,N);URL.revokeObjectURL(url);res(c.toDataURL('image/png'));};img.onerror=()=>{URL.revokeObjectURL(url);rej();};img.src=url;});}
+function guessJob(name){const n=name.toLowerCase().replace(/\.[a-z0-9]+$/,'').replace(/[^a-z]/g,' ');const flat=n.replace(/ /g,'');
+  for(const[j,,full]of JOBS){if(flat.includes(full.toLowerCase().replace(/ /g,'')))return j;}
+  for(const[j]of JOBS){if((' '+n+' ').includes(' '+j.toLowerCase()+' '))return j;}return '';}
+async function saveIcons(pairs){const cur=clone(metaDoc('icons'));cur.id='icons';cur.map={...(cur.map||{})};for(const[j,u]of pairs){if(u)cur.map[j]=u;else delete cur.map[j];}edit('meta','icons',cur);}
+function jobIconsBox(){
+  const draw=()=>{const box=$('jiGrid');if(!box)return;box.innerHTML=JOBS.map(([j,,full])=>`<div style="display:flex;align-items:center;gap:8px;padding:4px;border:1px solid var(--line);border-radius:8px">${jobPreview(j,34)}<div style="flex:1;min-width:0"><b style="font-size:12px">${j}</b><div class="note" style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${full}</div></div>
+      ${canWrite?`<label class="ib" style="cursor:pointer;color:var(--accent)" title="Upload icon">⤒<input type="file" accept="image/*" data-jiup="${j}" style="display:none"></label>${iconMap()[j]?`<button class="ib" data-jidel="${j}" title="Remove icon">✕</button>`:''}`:''}</div>`).join('');};
+  openModal(`<h2>Job icons</h2><p class="note">Upload your own image for each job (any size; it’s cropped to a circle). Jobs without an image show their 3-letter name in the role colour. Icons are shared with everyone on this board.</p>
+    ${canWrite?`<div class="btnrow" style="margin-bottom:8px"><label class="pri" style="display:inline-block;padding:6px 10px;border:1px solid #2d5bb0;border-radius:7px;cursor:pointer;background:linear-gradient(180deg,#1b3d7a,#14306a)">Upload several…<input type="file" accept="image/*" multiple id="jiMulti" style="display:none"></label><span class="note" style="align-self:center">Files named after a job (e.g. “Warrior.png” or “WAR.png”) are matched automatically.</span></div>`:''}
+    <div id="jiGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px"></div><p class="note" id="jiMsg"></p><div class="btnrow"><button data-close>Done</button></div>`);
+  draw();const g=$('jiGrid');
+  g.addEventListener('change',async e=>{const j=e.target.dataset.jiup;const f=e.target.files&&e.target.files[0];if(!j||!f)return;try{await saveIcons([[j,await resizeIcon(f)]]);setTimeout(draw,150);}catch(err){$('jiMsg').textContent='Could not read that image.';}});
+  g.addEventListener('click',e=>{const d=e.target.closest('[data-jidel]');if(d){saveIcons([[d.dataset.jidel,null]]);setTimeout(draw,150);}});
+  if($('jiMulti'))$('jiMulti').onchange=async e=>{const files=[...e.target.files];const pairs=[],miss=[];for(const f of files){const j=guessJob(f.name);if(!j){miss.push(f.name);continue;}try{pairs.push([j,await resizeIcon(f)]);}catch(err){miss.push(f.name);}}
+    if(pairs.length)await saveIcons(pairs);setTimeout(draw,150);$('jiMsg').textContent=`Added ${pairs.length} icon${pairs.length===1?'':'s'}.`+(miss.length?` Couldn’t match: ${miss.slice(0,6).join(', ')}${miss.length>6?'…':''} — upload those one by one.`:'');};
+}
 function newFightBox(){
   const n=fightsSorted().length+1,cur=curSlideDoc();
   openModal(`<h2>New fight</h2><p class="note">Pulls from now on go into this fight, numbered from Pull #1.</p>
@@ -861,6 +900,11 @@ function buildInsp(){
     sp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>Slide</h2>${txtRow('title','Slide title','data-st')}
       <div class="chks">${chk('showTitle','Show title on arena','data-a')}</div>
       <div class="btnrow"><button data-act="waymarks">+ 8 waymarks</button><button data-act="party">+ Party clock spots</button></div>
+      <div class="sect"><h2>Team jobs</h2>
+        <div class="chks"><label class="chk"><input type="checkbox" data-showjobs>Show players as jobs instead of MT / M1…</label></div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px 10px">${ROSTER_SLOTS.map(k=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)"><span style="width:22px">${k}</span><select data-roster="${k}" style="padding:3px 4px"><option value="">—</option>${JOBS.map(j=>`<option value="${j[0]}">${j[0]}</option>`).join('')}</select></label>`).join('')}</div>
+        <p class="note">Applies to every player marker with that label, on every slide. A marker’s own Job setting overrides it.</p>
+        <div class="btnrow"><button data-act="jobIcons">Job icons…</button></div></div>
       <div class="sect"><h2>Arena</h2>
       ${selRow('shape','Shape',[['circle','Circle'],['square','Square'],['rect','Rectangle'],['none','None — pieces only']],'data-a')}
       ${A.shape==='rect'?numRow('w','Width (y)',.5,2,100,'data-a')+numRow('h','Height (y)',.5,2,100,'data-a'):A.shape==='none'?'':numRow('radius',A.shape==='square'?'Half-width (y)':'Radius (y)',.5,5,50,'data-a')}${numRow('cx','Center X',.5,0,200,'data-a')}${numRow('cy','Center Y',.5,0,200,'data-a')}
@@ -931,6 +975,8 @@ function syncInsp(except,force){
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=arenaOf(sl),act=document.activeElement;
   insp.querySelectorAll('#layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
+  insp.querySelectorAll('[data-roster]').forEach(el=>{if(el!==act||force){const v=rosterMap()[el.dataset.roster]||'';if(el.value!==v)el.value=v;}});
+  insp.querySelectorAll('[data-showjobs]').forEach(el=>{el.checked=showJobs();});
   insp.querySelectorAll('[data-k],[data-a],[data-st],[data-ap]').forEach(el=>{
     if(el===except||(el===act&&!force))return;let v;
     if(el.dataset.st)v=sl&&sl[el.dataset.st];
@@ -950,6 +996,8 @@ insp.addEventListener('input',e=>{
   if(typeof v==='number'&&LIMITS[key]){const c=lim(key,v);if(c!==v){v=c;if(el.type==='number'&&document.activeElement===el)el.title=`Limited to ${LIMITS[key][0]} … ${LIMITS[key][1]}`;}}
   beginGesture();
   if(el.dataset.multi){selItems().forEach(it=>patchItem(it.id,{[el.dataset.multi]:v}));return;}
+  if(el.dataset.roster!==undefined||el.dataset.showjobs!==undefined){const r=clone(metaDoc('roster'));r.id='roster';r.map={...(r.map||{})};
+    if(el.dataset.roster){if(v)r.map[el.dataset.roster]=v;else delete r.map[el.dataset.roster];}else r.showJobs=!!v;edit('meta','roster',r);scheduleThumbs();return;}
   const sl=curSlideDoc();if(!sl)return;
   if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:v});scheduleThumbs();return;}
   if(el.dataset.a){edit('slides',sl.id,{...clone(sl),arena:{...arenaOf(sl),[el.dataset.a]:v}});syncInsp(el);return;}
@@ -994,6 +1042,7 @@ function action(a){
     case'party':{const A=arenaOf(sl),d=Math.min(8,A.radius*.4);let z=newZ();
       [['tank','MT',0],['tank','OT',90],['healer','H1',270],['healer','H2',180],['dps','M1',225],['dps','M2',135],['dps','R1',315],['dps','R2',45]].forEach(([role,t,an])=>{const it=make('marker',{role,text:t,name:t,...fromPolar(d,an),z:z++});edit('items',it.id,it);});return;}
     case'deselect':setSel([]);return;
+    case'jobIcons':jobIconsBox();return;
     case'flipOrder':newestFirst=!newestFirst;lsSet('ffxiv-pull-order',newestFirst?'new':'old');buildInsp();return;
     case'replay':replayPull();return;case'stopReplay':stopReplay();return;
     case'showAll':slideItems(curSlide).forEach(i=>{if(i.auto&&!i.pinned)patchItem(i.id,{pinned:true});});setTimeout(buildInsp);return;
@@ -1254,7 +1303,8 @@ function onSnap(col){return snap=>{
   if(loaded.slides){$('loading').style.display='none';
     if(!curSlide||!getDoc('slides',curSlide)){const s=slidesSorted();if(s.length){goSlide(s[0].id,true);return;}else if(curSlide){curSlide=null;renderAll();}}
   }
-  if(col==='slides'||col==='fights')renderSlides();
+  if(col==='slides'||col==='fights'||col==='meta')renderSlides();
+  if(col==='meta')setTimeout(buildInsp);
   scheduleRender();
 };}
 let loadTimer=null;
@@ -1308,7 +1358,7 @@ async function init(){
   if(MODE==='local'&&store.isEmpty()){seedLocal();}
   loadTimer=setTimeout(()=>{if(MODE==='shared'){const b=$('banner');b.textContent='Can’t reach the shared board yet — showing what’s cached. It will update when the connection returns.';b.classList.add('on');$('loading').style.display='none';}},10000);
   const err=e=>{if(e&&e.code==='revoked'){setReadOnly(true);}else toast('Lost connection to the shared board — reload to reconnect.');};
-  store.sub('fights',onSnap('fights'),err);store.sub('slides',onSnap('slides'),err);store.sub('items',onSnap('items'),err);
+  store.sub('meta',onSnap('meta'),err);store.sub('fights',onSnap('fights'),err);store.sub('slides',onSnap('slides'),err);store.sub('items',onSnap('items'),err);
   if(!canWrite)setReadOnly(true);
   if(room){
     sendPresence({uid:myId,name:myName||'',color:myColor(),slide:curSlide,sel:[],cursor:null});
