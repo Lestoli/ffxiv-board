@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v33</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v34</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -201,6 +201,7 @@ ul.layers .ib.act{color:var(--accent)}
     <div class="banner" id="banner"></div>
     <div class="readout" id="readout">—</div>
     <div class="tl" id="timeline"></div>
+    <div class="tl" id="pullbar"></div>
     <div class="zoom"><button id="zOut" title="Zoom out">−</button><span id="zPct">100%</span><button id="zIn" title="Zoom in">+</button><button id="zFit" title="Fit arena">Fit</button></div>
     <div class="empty" id="empty"><div>This board has no slides yet.</div><button class="pri" id="emptyAdd">Create the first slide</button></div>
     <div id="loading">Loading board…</div>
@@ -396,17 +397,40 @@ function hitsOf(ev){if(!ev)return[];if(Array.isArray(ev.hitList)&&ev.hitList.len
 function rankOf(ev){const h=hitsOf(ev);if(h.length)return String(h[0].rank);return ev&&ev.raw?'':String((ev&&ev.dist)||'');}
 const distOf=it=>{const d=it&&it.ev?rankOf(it.ev).trim():'';return d==='1'?'near':d==='8'?'far':'';};
 const distBadge=(it,long)=>{const k=distOf(it);return k==='near'?`<span class="dbadge near" title="Hit the closest player (#1) — likely a distance bait">${long?'#1 CLOSEST':'#1 near'}</span>`:k==='far'?`<span class="dbadge far" title="Hit the farthest player (#8) — likely a distance bait">${long?'#8 FARTHEST':'#8 far'}</span>`:'';};
-function autoShown(it){if(!it.auto||it.pinned)return true;const t=autoSeen.get(it.id);if(t==null)return false;const d=Date.now()-t;return d>=0&&d<showSecs*1000;}
+function autoShown(it){if(!it.auto||it.pinned)return true;if(rp&&it.slide===curSlide){const d=rp.t-relT(it);return d>=0&&d<showSecs*Math.max(1,rp.speed);}const t=autoSeen.get(it.id);if(t==null)return false;const d=Date.now()-t;return d>=0&&d<showSecs*1000;}
 let autoWasActive=false;
-setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;if(_replay){if(now>_replay.end)_replay=null;else{pullViewT=Math.max(0,_replay.off+(now-_replay.start)/1000);act=true;}}for(const t of autoSeen.values()){const d=now-t;if(d<lim){act=true;break;}}
+setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;for(const t of autoSeen.values()){const d=now-t;if(d<lim){act=true;break;}}
   if(act||autoWasActive){scheduleRender();}autoWasActive=act;},200);
-function replayPull(){const its=slideItems(curSlide).filter(i=>i.auto);if(!its.length)return;const t0=Math.min(...its.map(i=>i.at||0)),now=Date.now()+300;
-  _replay={start:now,off:(t0-pullT0(its))/1000,end:now+(Math.max(...its.map(i=>i.at||0))-t0)+showSecs*1000};
-  its.forEach(i=>autoSeen.set(i.id,now+((i.at||t0)-t0)));const dur=(Math.max(...its.map(i=>i.at||0))-t0)/1000;toast(`Replaying pull (${fmtT(dur*1000)})`);scheduleRender();}
-function stopReplay(){_replay=null;slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete(i.id);});scheduleRender();}
+// pull replay: rp={t:seconds into the pull, playing, speed}
+let rp=null,_rpTs=0;
+function relT(it){const sl=getDoc('slides',it.slide);const t0=sl&&sl.startedAt?sl.startedAt:0;return t0?Math.max(0,((it.at||0)-t0)/1000):0;}
+function pullDur(){const its=slideItems(curSlide).filter(i=>i.auto);return its.length?Math.ceil(Math.max(...its.map(relT))+showSecs):10;}
+function rpTick(ts){if(!rp||!rp.playing)return;const dt=Math.min(.25,(ts-_rpTs)/1000);_rpTs=ts;rp.t+=dt*rp.speed;const D=pullDur();if(rp.t>=D){rp.t=D;rp.playing=false;}
+  pullViewT=rp.t;renderStage();updPullBar();if(rp.playing)requestAnimationFrame(rpTick);}
+function rpPlay(p){if(!isPull(curSlideDoc()))return;if(!rp)rp={t:0,playing:false,speed:+(lsGet('ffxiv-rp-speed')||1)||1};if(p&&rp.t>=pullDur()-.05)rp.t=0;rp.playing=p;if(p){_rpTs=performance.now();requestAnimationFrame(rpTick);}updPullBar();scheduleRender();}
+function rpSeek(t){if(!rp)rp={t:0,playing:false,speed:+(lsGet('ffxiv-rp-speed')||1)||1};rp.t=Math.max(0,t);pullViewT=rp.t;updPullBar();renderStage();}
+function rpClose(){rp=null;updPullBar();scheduleRender();}
+function renderPullBar(){const el=$('pullbar'),sl=curSlideDoc(),on=isPull(sl);el.classList.toggle('on',on);if(!on)return;
+  if(el.dataset.slide!==sl.id||!el.firstChild){el.dataset.slide=sl.id;
+    el.innerHTML=`<button id="rpStart" title="Back to start">⏮</button><button id="rpPlay" class="pri" title="Play / pause replay (K)">▶</button><input type="range" id="rpScrub" min="0" step="0.05"><span class="tt" id="rpTime">0:00:000</span>
+      <select id="rpSpeed" title="Replay speed"><option value="0.5">½×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="rpClose" title="Exit replay (show live)">✕</button>`;}
+  updPullBar();}
+function updPullBar(){if(!$('rpScrub'))return;const D=pullDur();const sc=$('rpScrub');sc.max=D;if(document.activeElement!==sc)sc.value=rp?rp.t:0;
+  $('rpTime').textContent=rp?fmtT(rp.t*1000):'live';$('rpPlay').textContent=rp&&rp.playing?'⏸':'▶';$('rpSpeed').value=String(rp?rp.speed:(+(lsGet('ffxiv-rp-speed')||1)||1));$('rpClose').style.visibility=rp?'visible':'hidden';}
+function replayPull(){rpSeek(0);rpPlay(true);}
+function stopReplay(){rpClose();_replay=null;slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete(i.id);});scheduleRender();}
 const TIER=t=>t==='waymark'?1:t==='tether'?1.5:(t==='ink'||t==='arrow'||t==='marker'||t==='text')?2:0;
+// attacks from pets/summons/players are hidden (board-wide list, editable in the Pulls column)
+const PET_SOURCES=['Eos','Selene','Seraph','Earthly Star','Carbuncle','Ruby Carbuncle','Topaz Carbuncle','Emerald Carbuncle','Ifrit-Egi','Titan-Egi','Garuda-Egi','Demi-Bahamut','Demi-Phoenix','Solar Bahamut','Ruby Ifrit','Topaz Titan','Emerald Garuda','Automaton Queen','Rook Autoturret','Esteem','Bunshin','Liturgic Bell','Living Shadow','Moogle','Madeen','Lunar Star','Pom'];
+const PLAYER_SRC='(players’ own actions)';
+function srcOf(it){const e=it.ev||{};let name=e.src,id=null;if(typeof e.raw==='string'){const f=e.raw.split('|');if(!name)name=f[10];id=+f[9];}return{name:String(name||'').trim(),isPlayer:id!==null&&id>0&&id<0x40000000};}
+let showHiddenSrc=false;
+function hideMap(){const m=metaDoc('filters').hide;return m&&typeof m==='object'?m:{};}
+function srcHidden(name,isPlayer){const m=hideMap();if(isPlayer)return m[PLAYER_SRC]!==false;if(name in m)return !!m[name];return PET_SOURCES.includes(name);}
+function autoHidden(it){if(!it.auto||showHiddenSrc)return false;const s0=srcOf(it);return srcHidden(s0.name,s0.isPlayer);}
 let _bySlide={ver:-1,map:new Map()};
-function slideItems(sid){if(_bySlide.ver!==dataVer){const m=new Map();for(const it of allDocs('items').values()){let a=m.get(it.slide);if(!a){a=[];m.set(it.slide,a);}a.push(it);}for(const a of m.values())a.sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));_bySlide={ver:dataVer,map:m};}return(_bySlide.map.get(sid)||[]).slice();}
+function slideItems(sid){if(_bySlide.ver!==dataVer){const m=new Map();for(const it of allDocs('items').values()){if(autoHidden(it))continue;let a=m.get(it.slide);if(!a){a=[];m.set(it.slide,a);}a.push(it);}for(const a of m.values())a.sort((a,b)=>(TIER(a.type)-TIER(b.type))||((a.z||0)-(b.z||0))||(a.id<b.id?-1:1));_bySlide={ver:dataVer,map:m};}return(_bySlide.map.get(sid)||[]).slice();}
+function allSlideItems(sid){return[...allDocs('items').values()].filter(i=>i.slide===sid);} // includes hidden attacks (for deleting)
 function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
 // sane limits so a typo (e.g. 800) can't build a gigantic canvas
 const COORD_MIN=-200,COORD_MAX=400;
@@ -820,11 +844,14 @@ function renderSlides(){
      <div class="secOpts"><select id="fightSel" style="width:100%">${opts}</select>
        ${fs.length?(rec?'<span style="color:#ff8a8a">● Recording new pulls into this fight</span>':(sf&&canWrite?`<button data-recfight="${sf}" style="padding:3px 8px">Record new pulls into this fight</button>`:'')):'<span>Click “+ New fight” to group pulls by fight.</span>'}
        <label class="chk"><input type="checkbox" id="pFollow" ${followPulls?'checked':''}>Jump to new pulls</label>
+       <button data-srcfilter style="padding:3px 8px">Hide attacks from…</button>
        <label>Show attacks for <input type="number" id="pSecs" min="0.5" max="60" step="0.5" value="${showSecs}"> s</label>
        ${canWrite&&fp.length?`<button data-clearpulls style="padding:3px 8px">Clear ${fp.length} pull${fp.length===1?'':'s'}</button>`:''}</div></div>`},
       ...(fp.length?fp.map(sl=>({key:sl.id,html:card(sl,'#'+(sl.pull||'?'))})):[{key:'empty',html:'<div class="note">New pulls appear here automatically while the relay is running.</div>'}])];})());
 }
-function renderAll(){renderStage();renderSlides();buildInsp();renderTools();renderAvatars();renderTimeline();}
+function renderAll(){renderStage();renderSlides();buildInsp();renderTools();renderAvatars();renderTimeline();renderPullBar();}
+$('pullbar').addEventListener('click',e=>{const id=e.target.id;if(id==='rpPlay')rpPlay(!(rp&&rp.playing));if(id==='rpStart'){if(rp)rp.playing=false;rpSeek(0);}if(id==='rpClose')rpClose();});
+$('pullbar').addEventListener('input',e=>{const t=e.target;if(t.id==='rpScrub'){if(rp)rp.playing=false;rpSeek(+t.value);}if(t.id==='rpSpeed'){lsSet('ffxiv-rp-speed',t.value);if(!rp)rp={t:0,playing:false,speed:1};rp.speed=+t.value;updPullBar();}});
 function renderTimeline(){const el=$('timeline'),sl=curSlideDoc();const on=!!(sl&&sl.anim);el.classList.toggle('on',on);if(!on){playing=false;return;}
   if(el.dataset.slide!==sl.id||!el.firstChild){el.dataset.slide=sl.id;
     el.innerHTML=`<button id="tlStart" title="Back to start">⏮</button><button id="tlPlay" class="pri" title="Play / pause (K)">▶</button><input type="range" id="tlScrub" min="0" step="0.05"><span class="tt" id="tlTime">0:00:000</span>
@@ -885,7 +912,7 @@ function updStatus(others){
 // ================= slides =================
 function goSlide(id,fromFollow){
   if(!fromFollow)stopFollow();
-  closeTextEd(true);curSlide=id;selIds=[];editPhase=-1;pullViewT=0;_replay=null;fitView();playing=false;playT=0;
+  closeTextEd(true);curSlide=id;selIds=[];editPhase=-1;pullViewT=0;_replay=null;rp=null;fitView();playing=false;playT=0;
   sendPresence({slide:id,sel:[],view:[view.x,view.y,view.h]});
   renderAll();
 }
@@ -907,7 +934,7 @@ function dupSlide(sid,asPaste){
 }
 function delSlide(sid){
   const sls=slidesSorted();const i=sls.findIndex(s=>s.id===sid);
-  if(!edit('slides',sid,null))return;slideItems(sid).forEach(it=>edit('items',it.id,null));
+  if(!edit('slides',sid,null))return;allSlideItems(sid).forEach(it=>edit('items',it.id,null));
   if(sid===curSlide){const nx=sls[i+1]||sls[i-1];curSlide=null;if(nx)goSlide(nx.id);else renderAll();}
   toast('Slide deleted — Ctrl+Z to undo');
 }
@@ -936,11 +963,12 @@ $('leftCols').addEventListener('change',e=>{
   if(e.target.id==='pSecs'){const v=parseFloat(e.target.value);if(v>0){showSecs=v;lsSet('ffxiv-pull-secs',String(v));}}
 });
 $('leftCols').addEventListener('click',e=>{
+  if(e.target.closest('[data-srcfilter]')){e.stopPropagation();sourcesBox();return;}
   const nf=e.target.closest('[data-newfight]');if(nf){e.stopPropagation();newFightBox();return;}
   const rf=e.target.closest('[data-recfight]');if(rf){e.stopPropagation();const f=getDoc('fights',rf.dataset.recfight);if(f){edit('fights',f.id,{...clone(f),activeAt:Date.now()});toast(`New pulls will go into ${f.name}`);}return;}
   const fm=e.target.closest('[data-fightmenu]');if(fm){e.stopPropagation();fightMenu(fm.dataset.fightmenu,fm.getBoundingClientRect());return;}
   if(e.target.closest('[data-clearpulls]')){e.stopPropagation();const pl=pullsOf(shownFight());
-  confirmBox(`Delete all ${pl.length} pull slide${pl.length===1?'':'s'} in this fight and their attacks for everyone? You can undo with Ctrl+Z.`,'Delete pulls',()=>{pl.forEach(sl=>{edit('slides',sl.id,null);slideItems(sl.id).forEach(it=>edit('items',it.id,null));});if(isPull(curSlideDoc())||!curSlideDoc()){const m=slidesManual();curSlide=null;if(m[0])goSlide(m[0].id);else renderAll();}toast('Pulls cleared');});}},true);
+  confirmBox(`Delete all ${pl.length} pull slide${pl.length===1?'':'s'} in this fight and their attacks for everyone? You can undo with Ctrl+Z.`,'Delete pulls',()=>{pl.forEach(sl=>{edit('slides',sl.id,null);allSlideItems(sl.id).forEach(it=>edit('items',it.id,null));});if(isPull(curSlideDoc())||!curSlideDoc()){const m=slidesManual();curSlide=null;if(m[0])goSlide(m[0].id);else renderAll();}toast('Pulls cleared');});}},true);
 $('leftCols').addEventListener('contextmenu',e=>{const sl=e.target.closest('[data-slide]');if(!sl)return;e.preventDefault();slideMenu(sl.dataset.slide,{left:e.clientX,bottom:e.clientY,right:e.clientX});});
 function slideMenu(sid,rect){
   closeMenu();const m=document.createElement('div');m.className='menu';m.id='menu';
@@ -977,6 +1005,16 @@ function jobIconsBox(){
   if($('jiMulti'))$('jiMulti').onchange=async e=>{const files=[...e.target.files];const pairs=[],miss=[];for(const f of files){const j=guessJob(f.name);if(!j){miss.push(f.name);continue;}try{pairs.push([j,await resizeIcon(f)]);}catch(err){miss.push(f.name);}}
     if(pairs.length)await saveIcons(pairs);setTimeout(draw,150);$('jiMsg').textContent=`Added ${pairs.length} icon${pairs.length===1?'':'s'}.`+(miss.length?` Couldn’t match: ${miss.slice(0,6).join(', ')}${miss.length>6?'…':''} — upload those one by one.`:'');};
 }
+function sourcesBox(){
+  const counts=new Map();for(const it of allDocs('items').values()){if(!it.auto)continue;const s0=srcOf(it);const k=s0.isPlayer?PLAYER_SRC:(s0.name||'(unknown)');const c=counts.get(k)||{n:0,player:s0.isPlayer};c.n++;counts.set(k,c);}
+  for(const n of PET_SOURCES)if(!counts.has(n))counts.set(n,{n:0,player:false});if(!counts.has(PLAYER_SRC))counts.set(PLAYER_SRC,{n:0,player:true});
+  const rows=[...counts.entries()].sort((a,b)=>(b[1].n-a[1].n)||a[0].localeCompare(b[0]));
+  openModal(`<h2>Hide attacks from</h2><p class="note">Ticked sources are hidden from every pull — the arena, the attack list and replays. Pets and summons are ticked by default. Nothing is deleted; untick to bring them back.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 12px;max-height:50vh;overflow:auto;margin:8px 0">${rows.map(([n,c])=>`<label class="chk"><input type="checkbox" data-hsrc="${esc(n)}" ${srcHidden(n===PLAYER_SRC?'':n,c.player)?'checked':''} ${canWrite?'':'disabled'}>${esc(n)} <span class="note" style="margin:0">${c.n?'('+c.n+')':''}</span></label>`).join('')}</div>
+    <div class="btnrow"><label class="chk"><input type="checkbox" id="showHid" ${showHiddenSrc?'checked':''}>Show everything anyway (just for me)</label><span style="flex:1"></span><button data-close class="pri">Done</button></div>`);
+  $('modalBox').addEventListener('change',e=>{const n=e.target.dataset.hsrc;if(n!==undefined){const f=clone(metaDoc('filters'));f.id='filters';f.hide={...(f.hide||{}),[n]:e.target.checked};edit('meta','filters',f);}
+    if(e.target.id==='showHid'){showHiddenSrc=e.target.checked;dataVer++;renderAll();}});
+}
 function newFightBox(){
   const n=fightsSorted().length+1,cur=curSlideDoc();
   openModal(`<h2>New fight</h2><p class="note">Pulls from now on go into this fight, numbered from Pull #1.</p>
@@ -999,7 +1037,7 @@ function fightMenu(fid,rect){
       arena:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),arena:clone(arenaOf(cur)),arenaPhases:clone(cur.arenaPhases||[])});toast(`New pulls in ${f.name} will use this arena`);},
       applyall:()=>applyFightArena(fid),
       rec:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),activeAt:Date.now()});toast(`New pulls will go into ${f.name}`);},
-      del:()=>confirmBox(`Delete “${esc(f.name)}” and its ${pullsOf(fid).length} pulls for everyone? You can undo with Ctrl+Z.`,'Delete fight',()=>{pullsOf(fid).forEach(sl=>{edit('slides',sl.id,null);slideItems(sl.id).forEach(it=>edit('items',it.id,null));});edit('fights',fid,null);viewFight=null;if(!getDoc('slides',curSlide)||isPull(curSlideDoc())&&(curSlideDoc().fight||'')===fid){const m2=slidesManual();curSlide=null;if(m2[0])goSlide(m2[0].id);else renderAll();}renderSlides();})})[a.dataset.m]();};
+      del:()=>confirmBox(`Delete “${esc(f.name)}” and its ${pullsOf(fid).length} pulls for everyone? You can undo with Ctrl+Z.`,'Delete fight',()=>{pullsOf(fid).forEach(sl=>{edit('slides',sl.id,null);allSlideItems(sl.id).forEach(it=>edit('items',it.id,null));});edit('fights',fid,null);viewFight=null;if(!getDoc('slides',curSlide)||isPull(curSlideDoc())&&(curSlideDoc().fight||'')===fid){const m2=slidesManual();curSlide=null;if(m2[0])goSlide(m2[0].id);else renderAll();}renderSlides();})})[a.dataset.m]();};
 }
 function applyFightArena(fid){const f=getDoc('fights',fid);if(!f||!f.arena)return;pullsOf(fid).forEach(sl=>edit('slides',sl.id,{...clone(sl),arena:clone(f.arena),arenaPhases:clone(f.arenaPhases||[])}));toast(`Arena applied to ${pullsOf(fid).length} pulls`);}
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('#menu')&&!e.target.closest('[data-more]'))closeMenu();});
@@ -1252,7 +1290,7 @@ insp.addEventListener('click',e=>{
     if(e.ctrlKey||e.metaKey){setSel(selIds.includes(id)?selIds.filter(x=>x!==id):[...selIds,id]);lastLsel=id;return;}
     if(e.shiftKey&&lastLsel){const rows=[...li.parentElement.querySelectorAll('[data-lsel]')].map(r=>r.dataset.lsel);const i0=rows.indexOf(lastLsel),i1=rows.indexOf(id);
       if(i0>=0&&i1>=0){const rng=rows.slice(Math.min(i0,i1),Math.max(i0,i1)+1);setSel([...new Set([...selIds,...rng])]);return;}}
-    if(it&&it.auto){autoSeen.set(it.id,Date.now());pullViewT=Math.max(0,((it.at||0)-pullT0(slideItems(curSlide)))/1000);setTimeout(followPhase);}lastLsel=id;setSel([id]);return;}
+    if(it&&it.auto){autoSeen.set(it.id,Date.now());pullViewT=Math.max(0,((it.at||0)-pullT0(slideItems(curSlide)))/1000);if(rp){rp.playing=false;rpSeek(relT(it));}setTimeout(followPhase);}lastLsel=id;setSel([id]);return;}
   const pk=e.target.closest('[data-pick]');if(pk&&selIds.length===1){picking={id:selIds[0],field:pk.dataset.pick};renderTools();toast('Click a player or item on the arena (Esc to cancel)');return;}
   const one=selItems()[0];
   const hd=e.target.closest('[data-head]');if(hd&&one){patchItem(one.id,{head:hd.dataset.head||null});setTimeout(buildInsp);return;}
@@ -1466,6 +1504,7 @@ document.addEventListener('keydown',e=>{
   if(mod&&k==='a'){e.preventDefault();setSel(slideItems(curSlide).filter(i=>!i.locked&&i.visible!==false).map(i=>i.id));return;}
   if(e.key==='PageDown'||e.key==='PageUp'){const s=slidesSorted(),i=s.findIndex(x=>x.id===curSlide),j=i+(e.key==='PageDown'?1:-1);if(s[j])goSlide(s[j].id);e.preventDefault();return;}
   if(k==='k'&&!mod&&isAnimSlide()){setPlaying(!playing);return;}
+  if(k==='k'&&!mod&&isPull(curSlideDoc())){rpPlay(!(rp&&rp.playing));return;}
   if(e.key==='Escape'){if(picking||tetherStart){picking=null;tetherStart=null;renderTools();scheduleRender();return;}if(selIds.length)setSel([]);else setTool('select');return;}
   if(!mod&&TOOLKEYS[k]&&!(k==='e')){setTool(canWrite||['select','hand'].includes(TOOLKEYS[k])?TOOLKEYS[k]:tool);return;}
   if(!canWrite)return;
@@ -1564,7 +1603,7 @@ function onSnap(col){return snap=>{
   }
   if(col==='slides'||col==='fights'||col==='meta')renderSlides();
   if(col==='meta')setTimeout(buildInsp);
-  if(col==='slides')renderTimeline();
+  if(col==='slides'){renderTimeline();renderPullBar();}
   scheduleRender();
 };}
 let loadTimer=null;
