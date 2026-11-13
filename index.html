@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v34</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v35</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -1351,13 +1351,17 @@ function action(a){
 const svg=$('stage');
 function toWorld(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const m=svg.getScreenCTM();return m?p.matrixTransform(m.inverse()):{x:0,y:0};}
 // topmost item under the pointer, but a selected item wins if it is anywhere under the pointer
-function itemAtPreferSel(e){
-  let first=null;
-  for(const el of document.elementsFromPoint(e.clientX,e.clientY)){const g=el.closest&&el.closest('#stage [data-id]');if(!g)continue;
-    const it=getDoc('items',g.dataset.id);if(!it)continue;if(selIds.includes(it.id))return it;if(!first)first=it;}
-  return first;
-}
-function itemAt(e){const g=e.target.closest&&e.target.closest('[data-id]');return g?getDoc('items',g.dataset.id):null;}
+// is a world point on the visible arena floor (pieces minus holes)?
+function inPart(p,x,y){if(p.type==='rect'){const t=-(p.rot||0)*Math.PI/180,dx=x-p.x,dy=y-p.y,lx=dx*Math.cos(t)-dy*Math.sin(t),ly=dx*Math.sin(t)+dy*Math.cos(t);return Math.abs(lx)<=p.w/2&&Math.abs(ly)<=p.h/2;}
+  return Math.hypot(x-p.x,y-p.y)<=p.r;}
+function onArena(x,y){const sl=curSlideDoc();if(!sl)return true;const ps=arenaParts(arenaAt(sl,viewT()));const adds=ps.filter(p=>!p.cut);if(!adds.length)return true;return adds.some(p=>inPart(p,x,y))&&!ps.some(p=>p.cut&&inPart(p,x,y));}
+// clipped AoEs only count where they're actually drawn (on the arena)
+function hitItems(e){const pt=toWorld(e),on=onArena(pt.x,pt.y),clip=arenaAt(curSlideDoc(),viewT()).clip,out=[],seen=new Set();
+  for(const el of document.elementsFromPoint(e.clientX,e.clientY)){const g=el.closest&&el.closest('#stage [data-id]');if(!g||seen.has(g.dataset.id))continue;seen.add(g.dataset.id);
+    const it=getDoc('items',g.dataset.id);if(!it)continue;if(clip&&!on&&AOE.has(it.type))continue;out.push(it);}
+  return out;}
+function itemAtPreferSel(e){const hs=hitItems(e);return hs.find(it=>selIds.includes(it.id))||hs[0]||null;}
+function itemAt(e){return hitItems(e)[0]||null;}
 svg.addEventListener('pointerdown',e=>{
   if(!curSlide)return;closeMenu();
   const pt=toWorld(e);
