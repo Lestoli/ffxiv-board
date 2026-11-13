@@ -63,6 +63,11 @@ ul.layers li.dist-near{box-shadow:inset 3px 0 0 #ffd43b}ul.layers li.dist-far{bo
 #slideList{flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:8px}
 .sl{content-visibility:auto;contain-intrinsic-size:auto 190px;position:relative;border:1px solid var(--line);border-radius:8px;padding:5px;cursor:pointer;background:var(--panel)}
 .sl:hover{border-color:#2d5bb0}
+.sl.msel{outline:2px solid #ffd43b;outline-offset:2px}
+.sl.msel::after{content:'✓';position:absolute;top:6px;left:8px;width:18px;height:18px;border-radius:50%;background:#ffd43b;color:#1a1200;font:800 12px/18px Inter;text-align:center}
+#slSelBar{position:absolute;left:8px;right:8px;bottom:8px;display:none;align-items:center;gap:6px;background:rgba(13,22,48,.97);border:1px solid #ffd43b;border-radius:9px;padding:6px 8px;z-index:6;box-shadow:0 6px 20px rgba(0,0,0,.45);font-size:12px}
+#slSelBar.on{display:flex}
+#slSelBar b{flex:1}
 .sl.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 14px rgba(95,211,255,.2)}
 .sl svg{width:100%;aspect-ratio:1;display:block;border-radius:5px;pointer-events:none}
 .sl .cap{display:flex;align-items:center;gap:5px;margin-top:4px;font-size:11.5px}
@@ -173,7 +178,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v36</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v37</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -184,7 +189,7 @@ ul.layers .ib.act{color:var(--accent)}
 </header>
 <main>
   <div id="tools"></div>
-  <div id="leftCols">
+  <div id="leftCols" style="position:relative">
   <div id="slidesPane">
     <h2 class="colHead">Slides<span class="sp"></span><button id="showPulls" title="Show the Pulls column"></button></h2>
     <div id="slideList"></div>
@@ -193,6 +198,7 @@ ul.layers .ib.act{color:var(--accent)}
     <h2 class="colHead pullsH">Pulls<span class="sp"></span><button id="hidePulls" title="Hide the Pulls column">✕</button></h2>
     <div id="pullList"></div>
   </div>
+  <div id="slSelBar"><b id="slSelN"></b><button class="danger" id="slSelDel">Delete</button><button id="slSelClr" title="Clear selection (Esc)">✕</button></div>
   </div>
   <div class="stagewrap" id="wrap">
     <svg id="stage" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -831,7 +837,7 @@ function renderSlides(){
   const man=slidesManual(),pl=slidesPulls(),newest=pl[0];
   const card=(sl,num)=>{const B=arenaBox(arenaOf(sl)),A={cx:B.cx,cy:B.cy},h=B.h,pull=isPull(sl);
     const live=pull&&sl===newest&&slideItems(sl.id).some(i=>i.auto&&autoSeen.has(i.id)&&Date.now()-autoSeen.get(i.id)<60000);
-    return `<div class="sl${pull?' pull':''}${sl.id===curSlide?' on':''}" data-slide="${sl.id}">${thumbSVG(sl)}
+    return `<div class="sl${pull?' pull':''}${sl.id===curSlide?' on':''}${selSlides.has(sl.id)?' msel':''}" data-slide="${sl.id}">${thumbSVG(sl)}
       <div class="dots">${(where[sl.id]||[]).slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('')}</div>
       <div class="cap"><span class="num">${num}</span><span class="tt">${esc(sl.title||'Untitled')}${live?'<span class="live">LIVE</span>':''}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;};
   reconcile(list,[...man.map((sl,i)=>({key:sl.id,html:card(sl,i+1)})),...(canWrite?[{key:'acts',html:`<div class="slActs"><button class="pri" data-addslide>+ New slide</button>${readClip('slide')?'<button data-pasteslide>Paste copied slide</button>':''}</div>`}]:[])]);
@@ -932,6 +938,17 @@ function dupSlide(sid,asPaste){
   for(const it of remapRefs(src.items,map,()=>false)){const nid=map[it.id];edit('items',nid,{...it,id:nid,slide:id});}
   goSlide(id);toast(asPaste?'Slide pasted':'Slide duplicated');
 }
+// ---- multi-select of slides / pulls (Ctrl/Cmd-click to toggle, Shift-click for a range) ----
+const selSlides=new Set();let slAnchor=null;
+function updSlideSel(){for(const id of[...selSlides])if(!getDoc('slides',id))selSlides.delete(id);const n=selSlides.size;$('slSelBar').classList.toggle('on',n>0&&canWrite);
+  const pulls=[...selSlides].filter(id=>isPull(getDoc('slides',id))).length;$('slSelN').textContent=`${n} selected${pulls&&pulls<n?` (${pulls} pull${pulls===1?'':'s'})`:pulls?' pull'+(n===1?'':'s'):' slide'+(n===1?'':'s')}`;}
+function clearSlideSel(){if(!selSlides.size)return;selSlides.clear();renderSlides();updSlideSel();}
+function deleteSlides(ids){ids=ids.filter(id=>getDoc('slides',id));if(!ids.length)return;const order=slidesSorted();
+  ids.forEach(id=>{edit('slides',id,null);allSlideItems(id).forEach(it=>edit('items',it.id,null));});
+  if(ids.includes(curSlide)){const left=order.filter(s=>!ids.includes(s.id));const i=order.findIndex(s=>s.id===curSlide);const nx=left.find(s=>order.indexOf(s)>i)||left[left.length-1];curSlide=null;if(nx)goSlide(nx.id);else renderAll();}
+  selSlides.clear();renderSlides();updSlideSel();toast(`Deleted ${ids.length} slide${ids.length===1?'':'s'} — Ctrl+Z to undo`);}
+function askDeleteSlides(){const ids=[...selSlides];if(!ids.length)return;const pulls=ids.filter(id=>isPull(getDoc('slides',id))).length;
+  confirmBox(`Delete ${ids.length} ${pulls===ids.length?'pull':pulls?'slide/pull':'slide'}${ids.length===1?'':'s'} and everything on them for everyone? You can undo with Ctrl+Z.`,'Delete '+ids.length,()=>deleteSlides(ids));}
 function delSlide(sid){
   const sls=slidesSorted();const i=sls.findIndex(s=>s.id===sid);
   if(!edit('slides',sid,null))return;allSlideItems(sid).forEach(it=>edit('items',it.id,null));
@@ -947,6 +964,8 @@ function copySlide(sid){writeClip('slide',{slide:clone(getDoc('slides',sid)),ite
 function writeClip(kind,data){const v={kind,data};clipMem=v;try{localStorage.setItem(CLIPKEY,JSON.stringify(v));}catch(e){}}
 let clipMem=null;function readClip(kind){let v=clipMem;try{const j=JSON.parse(localStorage.getItem(CLIPKEY));if(j)v=j;}catch(e){}return v&&v.kind===kind?v.data:null;}
 $('emptyAdd').onclick=newSlide;
+$('slSelDel').onclick=askDeleteSlides;$('slSelClr').onclick=clearSlideSel;
+$('leftCols').addEventListener('mousedown',e=>{if(e.shiftKey&&e.target.closest('[data-slide]'))e.preventDefault();});
 let pullsOpen=lsGet('ffxiv-pulls-col')!=='0';
 function setPullsCol(open){pullsOpen=open;lsSet('ffxiv-pulls-col',open?'1':'0');$('leftCols').classList.toggle('nopulls',!open);scheduleRender();}
 $('hidePulls').onclick=()=>setPullsCol(false);$('showPulls').onclick=()=>setPullsCol(true);
@@ -955,7 +974,12 @@ $('leftCols').addEventListener('click',e=>{if(e.target.closest('[data-addslide]'
 $('leftCols').addEventListener('click',e=>{
   const m=e.target.closest('[data-more]');
   if(m){e.stopPropagation();slideMenu(m.dataset.more,m.getBoundingClientRect());return;}
-  const sl=e.target.closest('[data-slide]');if(sl&&sl.dataset.slide!==curSlide)goSlide(sl.dataset.slide);
+  const sl=e.target.closest('[data-slide]');if(!sl)return;const sid=sl.dataset.slide;
+  if((e.ctrlKey||e.metaKey)&&canWrite){if(!selSlides.size&&curSlide&&curSlide!==sid&&isPull(getDoc('slides',curSlide))===isPull(getDoc('slides',sid)))selSlides.add(curSlide);
+    selSlides.has(sid)?selSlides.delete(sid):selSlides.add(sid);slAnchor=sid;renderSlides();updSlideSel();return;}
+  if(e.shiftKey&&canWrite){const box=sl.parentElement,cards=[...box.querySelectorAll('[data-slide]')].map(c=>c.dataset.slide);const from=slAnchor&&cards.includes(slAnchor)?slAnchor:(cards.includes(curSlide)?curSlide:sid);
+    const i0=cards.indexOf(from),i1=cards.indexOf(sid);cards.slice(Math.min(i0,i1),Math.max(i0,i1)+1).forEach(id=>selSlides.add(id));renderSlides();updSlideSel();return;}
+  slAnchor=sid;if(selSlides.size)clearSlideSel();if(sid!==curSlide)goSlide(sid);
 });
 $('leftCols').addEventListener('change',e=>{
   if(e.target.id==='pFollow'){followPulls=e.target.checked;lsSet('ffxiv-pull-follow',followPulls?'1':'0');}
@@ -1509,9 +1533,11 @@ document.addEventListener('keydown',e=>{
   if(e.key==='PageDown'||e.key==='PageUp'){const s=slidesSorted(),i=s.findIndex(x=>x.id===curSlide),j=i+(e.key==='PageDown'?1:-1);if(s[j])goSlide(s[j].id);e.preventDefault();return;}
   if(k==='k'&&!mod&&isAnimSlide()){setPlaying(!playing);return;}
   if(k==='k'&&!mod&&isPull(curSlideDoc())){rpPlay(!(rp&&rp.playing));return;}
+  if(e.key==='Escape'&&selSlides.size&&!selIds.length){clearSlideSel();return;}
   if(e.key==='Escape'){if(picking||tetherStart){picking=null;tetherStart=null;renderTools();scheduleRender();return;}if(selIds.length)setSel([]);else setTool('select');return;}
   if(!mod&&TOOLKEYS[k]&&!(k==='e')){setTool(canWrite||['select','hand'].includes(TOOLKEYS[k])?TOOLKEYS[k]:tool);return;}
   if(!canWrite)return;
+  if((e.key==='Delete'||e.key==='Backspace')&&selSlides.size&&!selIds.length){e.preventDefault();askDeleteSlides();return;}
   const its=selItems();if(!its.length)return;
   const step=(arenaOf(curSlideDoc()).snap||.5)*(e.shiftKey?5:1);
   const mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
@@ -1605,7 +1631,7 @@ function onSnap(col){return snap=>{
   if(loaded.slides){$('loading').style.display='none';
     if(!curSlide||!getDoc('slides',curSlide)){const s=slidesSorted();if(s.length){goSlide(s[0].id,true);return;}else if(curSlide){curSlide=null;renderAll();}}
   }
-  if(col==='slides'||col==='fights'||col==='meta')renderSlides();
+  if(col==='slides'||col==='fights'||col==='meta'){renderSlides();updSlideSel();}
   if(col==='meta')setTimeout(buildInsp);
   if(col==='slides'){renderTimeline();renderPullBar();}
   scheduleRender();
