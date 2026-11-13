@@ -173,7 +173,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v35</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v36</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -1645,7 +1645,7 @@ const browserDownloads={save:async({filename,data})=>{const blob=data instanceof
 let myName=lsGet('ffxiv-board-name')||'';
 function askName(first){
   openModal(`<h2>${first?'Welcome to the board':'Change your name'}</h2><p class="note">Your name and cursor are shown to teammates on the board.</p>
-    <div class="row two"><label>Your name</label><input type="text" id="nmIn" maxlength="24" value="${esc(myName)}" placeholder="e.g. Anthony"></div>
+    <div class="row two"><label>Your name</label><input type="text" id="nmIn" maxlength="24" value="${esc(myName)}" placeholder="e.g. Kiyo"></div>
     <div class="btnrow"><button class="pri" id="nmOk">${first?'Join board':'Save'}</button>${first?'':'<button data-close>Cancel</button>'}</div>`);
   const ok=()=>{const v=$('nmIn').value.trim().slice(0,24);if(!v){$('nmIn').focus();return;}myName=v;lsSet('ffxiv-board-name',v);sendPresence({name:v});closeModal();renderAvatars();};
   $('nmOk').onclick=ok;$('nmIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>$('nmIn').focus(),30);
