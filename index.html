@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v38</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v39</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -599,6 +599,12 @@ function tetherSVG(s,live,k){
 }
 // team jobs: board-wide label -> job map, uploaded icons, and the show-jobs switch
 function metaDoc(id){return getDoc('meta',id)||{};}
+function sGroups(){const l=metaDoc('sgroups').list||{};return Object.entries(l).filter(([,g])=>g).map(([id,g])=>({id,name:g.name||'Group',order:g.order||0})).sort((a,b)=>a.order-b.order||(a.id<b.id?-1:1));}
+function sGroupOf(sl){const g=sl&&sl.sgroup;return g&&(metaDoc('sgroups').list||{})[g]?g:'';}
+let viewGroup=lsGet('ffxiv-view-group');
+function shownGroup(){const gs=sGroups();if(viewGroup!==null&&(viewGroup===''||gs.some(g=>g.id===viewGroup)))return viewGroup;const c=curSlideDoc();if(c&&!isPull(c)&&sGroupOf(c))return sGroupOf(c);return gs[0]?gs[0].id:'';}
+function setViewGroup(g){viewGroup=g;lsSet('ffxiv-view-group',g);}
+function setSGroups(fn){const d=clone(metaDoc('sgroups'));d.id='sgroups';d.list=d.list||{};fn(d.list);edit('meta','sgroups',d);}
 function rosterMap(){const m=metaDoc('roster').map;return m&&typeof m==='object'?m:{};}
 function iconMap(){const m=metaDoc('icons').map;return m&&typeof m==='object'?m:{};}
 const showJobs=()=>!!metaDoc('roster').showJobs;
@@ -844,12 +850,11 @@ function renderSlides(){
     return `<div class="sl${pull?' pull':''}${sl.id===curSlide?' on':''}${selSlides.has(sl.id)?' msel':''}" data-slide="${sl.id}">${thumbSVG(sl)}
       <div class="dots">${(where[sl.id]||[]).slice(0,6).map(c=>`<i style="background:${c}"></i>`).join('')}</div>
       <div class="cap"><span class="num">${num}</span><span class="tt">${esc(sl.title||'Untitled')}${live?'<span class="live">LIVE</span>':''}</span><button class="more" data-more="${sl.id}" title="Slide actions">⋯</button></div></div>`;};
-  const fsx=fightsSorted();let entries=[];
-  if(fsx.length){const groups=[...fsx.map(f=>({id:f.id,name:f.name||'Fight'})),{id:'',name:'Other slides'}];
-    for(const g of groups){const list2=man.filter(sl=>(sl.fight&&getDoc('fights',sl.fight)?sl.fight:'')===g.id);if(!list2.length&&g.id==='')continue;const col=collapsedGroups.has(g.id||'_none');
-      entries.push({key:'g:'+(g.id||'_none'),html:`<div class="sgHead" data-sgroup="${g.id||'_none'}"><span class="car">${col?'▸':'▾'}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}</span><span class="n">${list2.length}</span></div>`});
-      if(!col)list2.forEach((sl,i)=>entries.push({key:sl.id,html:card(sl,i+1)}));}}
-  else entries=man.map((sl,i)=>({key:sl.id,html:card(sl,i+1)}));
+  const gs=sGroups(),sg=shownGroup(),inG=man.filter(sl=>sGroupOf(sl)===sg),nUng=man.filter(sl=>!sGroupOf(sl)).length;
+  const gopts=gs.map(g=>`<option value="${g.id}"${g.id===sg?' selected':''}>${esc(g.name)} (${man.filter(sl=>sGroupOf(sl)===g.id).length})</option>`).join('')+(nUng||!gs.length||sg===''?`<option value=""${sg===''?' selected':''}>${gs.length?'Ungrouped slides':'All slides'} (${nUng})</option>`:'');
+  const entries=[{key:'ghead',html:`<div><div class="secHead" style="margin-top:0;border-top:0;padding-top:0">Group<span class="sp"></span>${canWrite?'<button data-newgroup title="Make a new group of slides">+ New group</button>':''}${canWrite&&sg?`<button data-groupmenu="${sg}" title="Group options">⋯</button>`:''}</div>
+     <div class="secOpts"><select id="groupSel" style="width:100%">${gopts}</select>${gs.length?'':'<span>Click “+ New group” to sort slides into groups.</span>'}</div></div>`},
+    ...inG.map((sl,i)=>({key:sl.id,html:card(sl,i+1)}))];
   reconcile(list,[...entries,...(canWrite?[{key:'acts',html:`<div class="slActs"><button class="pri" data-addslide>+ New slide</button>${readClip('slide')?'<button data-pasteslide>Paste copied slide</button>':''}</div>`}]:[])]);
   const liveAny=newest&&slideItems(newest.id).some(i=>i.auto&&autoSeen.has(i.id)&&Date.now()-autoSeen.get(i.id)<60000);
   $('showPulls').innerHTML=`Pulls (${pl.length})${liveAny?' <span class="live">LIVE</span>':''} ›`;
@@ -928,6 +933,7 @@ function updStatus(others){
 // ================= slides =================
 function goSlide(id,fromFollow){
   if(!fromFollow)stopFollow();
+  {const d=getDoc('slides',id);if(d&&!isPull(d)&&sGroupOf(d)!==shownGroup())setViewGroup(sGroupOf(d));}
   closeTextEd(true);curSlide=id;selIds=[];editPhase=-1;pullViewT=0;_replay=null;rp=null;fitView();playing=false;playT=0;
   sendPresence({slide:id,sel:[],view:[view.x,view.y,view.h]});
   renderAll();
@@ -935,7 +941,7 @@ function goSlide(id,fromFollow){
 function nextOrder(after){const s=slidesManual();if(after==null)return s.length?s[s.length-1].order+1:1;const i=s.findIndex(x=>x.id===after);if(i<0)return nextOrder();const a=s[i].order,b=i+1<s.length?s[i+1].order:a+2;return(a+b)/2;}
 function newSlide(){
   const cur=curSlideDoc();const id=uid();
-  const sl={id,title:'Slide '+(slidesManual().length+1),order:nextOrder(isPull(cur)?null:curSlide),arena:clone(arenaOf(cur))};if(cur&&cur.fight&&getDoc('fights',cur.fight))sl.fight=cur.fight;
+  const sl={id,title:'Slide '+(slidesManual().length+1),order:nextOrder(isPull(cur)?null:curSlide),arena:clone(arenaOf(cur))};{const g=shownGroup();if(g)sl.sgroup=g;}
   if(!edit('slides',id,sl))return;goSlide(id);
 }
 function dupSlide(sid,asPaste){
@@ -952,8 +958,8 @@ function dupSlide(sid,asPaste){
 const selSlides=new Set();let slAnchor=null;
 function updSlideSel(){setTimeout(fillSelFight);for(const id of[...selSlides])if(!getDoc('slides',id))selSlides.delete(id);const n=selSlides.size;$('slSelBar').classList.toggle('on',n>0&&canWrite);
   const pulls=[...selSlides].filter(id=>isPull(getDoc('slides',id))).length;$('slSelN').textContent=`${n} selected${pulls&&pulls<n?` (${pulls} pull${pulls===1?'':'s'})`:pulls?' pull'+(n===1?'':'s'):' slide'+(n===1?'':'s')}`;}
-function fillSelFight(){const el=$('slSelFight');const fs=fightsSorted();const onlyManual=[...selSlides].every(id=>!isPull(getDoc('slides',id)));el.style.display=fs.length&&onlyManual?'':'none';
-  el.innerHTML='<option value="">Move to fight…</option>'+fs.map(f=>`<option value="${f.id}">${esc(f.name||'Fight')}</option>`).join('')+'<option value="__none">Other slides</option>';}
+function fillSelFight(){const el=$('slSelFight');const gs=sGroups();const onlyManual=[...selSlides].every(id=>!isPull(getDoc('slides',id)));el.style.display=gs.length&&onlyManual?'':'none';
+  el.innerHTML='<option value="">Move to group…</option>'+gs.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')+'<option value="__none">Ungrouped</option>';}
 function clearSlideSel(){if(!selSlides.size)return;selSlides.clear();renderSlides();updSlideSel();}
 function deleteSlides(ids){ids=ids.filter(id=>getDoc('slides',id));if(!ids.length)return;const order=slidesSorted();
   ids.forEach(id=>{edit('slides',id,null);allSlideItems(id).forEach(it=>edit('items',it.id,null));});
@@ -968,7 +974,7 @@ function delSlide(sid){
   toast('Slide deleted — Ctrl+Z to undo');
 }
 function moveSlide(sid,dir){
-  const me=getDoc('slides',sid),fg=x=>(x.fight&&getDoc('fights',x.fight)?x.fight:'');const s=isPull(me)?slidesPulls():slidesManual().filter(x=>fg(x)===fg(me));if(isPull(me))dir=-dir;const i=s.findIndex(x=>x.id===sid),j=i+dir;if(i<0||j<0||j>=s.length)return;
+  const me=getDoc('slides',sid),fg=sGroupOf;const s=isPull(me)?slidesPulls():slidesManual().filter(x=>fg(x)===fg(me));if(isPull(me))dir=-dir;const i=s.findIndex(x=>x.id===sid),j=i+dir;if(i<0||j<0||j>=s.length)return;
   const a=s[i],b=s[j];edit('slides',a.id,{...clone(a),order:b.order});edit('slides',b.id,{...clone(b),order:a.order});
   if(a.order===b.order)edit('slides',a.id,{...clone(a),order:b.order+dir*.5});
 }
@@ -976,10 +982,28 @@ function copySlide(sid){writeClip('slide',{slide:clone(getDoc('slides',sid)),ite
 function writeClip(kind,data){const v={kind,data};clipMem=v;try{localStorage.setItem(CLIPKEY,JSON.stringify(v));}catch(e){}}
 let clipMem=null;function readClip(kind){let v=clipMem;try{const j=JSON.parse(localStorage.getItem(CLIPKEY));if(j)v=j;}catch(e){}return v&&v.kind===kind?v.data:null;}
 $('emptyAdd').onclick=newSlide;
-const collapsedGroups=new Set((lsGet('ffxiv-sg-collapsed')||'').split(',').filter(Boolean));
-$('leftCols').addEventListener('click',e=>{const h=e.target.closest('[data-sgroup]');if(!h)return;e.stopPropagation();const g=h.dataset.sgroup;collapsedGroups.has(g)?collapsedGroups.delete(g):collapsedGroups.add(g);lsSet('ffxiv-sg-collapsed',[...collapsedGroups].join(','));renderSlides();},true);
+$('leftCols').addEventListener('click',e=>{
+  if(e.target.closest('[data-newgroup]')){e.stopPropagation();newGroupBox();return;}
+  const gm=e.target.closest('[data-groupmenu]');if(gm){e.stopPropagation();groupMenu(gm.dataset.groupmenu,gm.getBoundingClientRect());}},true);
+$('leftCols').addEventListener('change',e=>{if(e.target.id==='groupSel'){setViewGroup(e.target.value);renderSlides();const f=slidesManual().find(sl=>sGroupOf(sl)===e.target.value);if(f&&!isPull(curSlideDoc()))goSlide(f.id);}});
+function newGroupBox(){const n=sGroups().length+1;
+  openModal(`<h2>New group</h2><p class="note">New slides you make while this group is shown go into it.</p><div class="row two"><label>Group name</label><input type="text" id="gnIn" maxlength="40" placeholder="e.g. M5S" value="Group ${n}"></div><div class="btnrow"><button class="pri" id="gnOk">Create</button><button data-close>Cancel</button></div>`);
+  const ok=()=>{const name=$('gnIn').value.trim().slice(0,40)||`Group ${n}`,id=uid();setSGroups(l=>{l[id]={name,order:(sGroups().slice(-1)[0]?.order||0)+1};});setViewGroup(id);closeModal();renderSlides();toast(`${name} created`);};
+  $('gnOk').onclick=ok;$('gnIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>{$('gnIn').focus();$('gnIn').select();},30);}
+function groupMenu(gid,rect){closeMenu();const g=sGroups().find(x=>x.id===gid);if(!g)return;const n=slidesManual().filter(sl=>sGroupOf(sl)===gid);
+  const m=document.createElement('div');m.className='menu';m.id='menu';
+  m.innerHTML=`<button data-m="rename">Rename group</button><button data-m="up">Move group up</button><button data-m="down">Move group down</button><hr><button data-m="ungroup">Delete group (keep its ${n.length} slides)</button><button data-m="del" style="color:#ffb3bb">Delete group & its slides</button>`;
+  document.body.appendChild(m);const x=Math.min(rect.right+4,innerWidth-250),y=Math.min(rect.bottom,innerHeight-m.offsetHeight-8);m.style.left=x+'px';m.style.top=y+'px';
+  const swap=dir=>{const gs=sGroups(),i=gs.findIndex(x=>x.id===gid),j=i+dir;if(j<0||j>=gs.length)return;setSGroups(l=>{gs.forEach((x,k)=>{l[x.id]={name:x.name,order:k+1};});l[gid].order=j+1;l[gs[j].id].order=i+1;});};
+  m.onclick=e=>{const a=e.target.closest('[data-m]');if(!a)return;closeMenu();
+    ({rename:()=>{openModal(`<h2>Rename group</h2><div class="row two"><label>Name</label><input type="text" id="grIn" maxlength="40" value="${esc(g.name)}"></div><div class="btnrow"><button class="pri" id="grOk">Save</button><button data-close>Cancel</button></div>`);
+        const ok=()=>{const v=$('grIn').value.trim().slice(0,40);if(v){setSGroups(l=>{l[gid]={...(l[gid]||{}),name:v};});closeModal();}};$('grOk').onclick=ok;$('grIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>$('grIn').focus(),30);},
+      up:()=>swap(-1),down:()=>swap(1),
+      ungroup:()=>{n.forEach(sl=>edit('slides',sl.id,{...clone(sl),sgroup:null}));setSGroups(l=>{l[gid]=null;});setViewGroup('');renderSlides();toast(`${g.name} deleted — its slides are in Ungrouped`);},
+      del:()=>confirmBox(`Delete “${esc(g.name)}” and its ${n.length} slide${n.length===1?'':'s'} for everyone? You can undo with Ctrl+Z.`,'Delete group',()=>{n.forEach(sl=>{edit('slides',sl.id,null);allSlideItems(sl.id).forEach(it=>edit('items',it.id,null));});setSGroups(l=>{l[gid]=null;});viewGroup=null;lsSet('ffxiv-view-group','');viewGroup=null;
+        if(!getDoc('slides',curSlide)){const m2=slidesManual();curSlide=null;if(m2[0])goSlide(m2[0].id);else renderAll();}renderSlides();})})[a.dataset.m]();};}
 $('slSelDel').onclick=askDeleteSlides;
-$('slSelFight').onchange=e=>{const v=e.target.value;if(!v)return;const f=v==='__none'?null:v;[...selSlides].forEach(id=>{const d=getDoc('slides',id);if(d&&!isPull(d))edit('slides',id,{...clone(d),fight:f});});const n=selSlides.size;selSlides.clear();renderSlides();updSlideSel();toast(`Moved ${n} slide${n===1?'':'s'}`);};$('slSelClr').onclick=clearSlideSel;
+$('slSelFight').onchange=e=>{const v=e.target.value;if(!v)return;const f=v==='__none'?null:v;[...selSlides].forEach(id=>{const d=getDoc('slides',id);if(d&&!isPull(d))edit('slides',id,{...clone(d),sgroup:f});});const n=selSlides.size;selSlides.clear();renderSlides();updSlideSel();toast(`Moved ${n} slide${n===1?'':'s'}`);};$('slSelClr').onclick=clearSlideSel;
 $('leftCols').addEventListener('mousedown',e=>{if(e.shiftKey&&e.target.closest('[data-slide]'))e.preventDefault();});
 let pullsOpen=lsGet('ffxiv-pulls-col')!=='0';
 function setPullsCol(open){pullsOpen=open;lsSet('ffxiv-pulls-col',open?'1':'0');$('leftCols').classList.toggle('nopulls',!open);scheduleRender();}
@@ -1013,7 +1037,7 @@ function slideMenu(sid,rect){
   closeMenu();const m=document.createElement('div');m.className='menu';m.id='menu';
   const w=canWrite;
   m.innerHTML=`${w?'<button data-m="rename">Rename</button>':''}${w?'<button data-m="dup">Duplicate</button>':''}<button data-m="copy">Copy slide</button>${w&&readClip('slide')?'<button data-m="paste">Paste copied slide after</button>':''}
-    ${w&&!isPull(getDoc('slides',sid))&&fightsSorted().length?'<hr>'+fightsSorted().filter(f=>f.id!==(getDoc('slides',sid)||{}).fight).map(f=>`<button data-m="mvf" data-f="${f.id}">Move to ${esc(f.name||'Fight')}</button>`).join('')+((getDoc('slides',sid)||{}).fight?'<button data-m="mvf" data-f="">Move to Other slides</button>':''):''}
+    ${w&&!isPull(getDoc('slides',sid))&&sGroups().length?'<hr>'+sGroups().filter(g=>g.id!==sGroupOf(getDoc('slides',sid))).map(g=>`<button data-m="mvf" data-f="${g.id}">Move to ${esc(g.name)}</button>`).join('')+(sGroupOf(getDoc('slides',sid))?'<button data-m="mvf" data-f="">Move to Ungrouped</button>':''):''}
     ${w?'<hr><button data-m="up">Move up</button><button data-m="down">Move down</button><hr><button data-m="del" style="color:#ffb3bb">Delete slide</button>':''}`;
   document.body.appendChild(m);
   const x=Math.min(rect.right+4,innerWidth-190),y=Math.min(rect.bottom,innerHeight-m.offsetHeight-8);m.style.left=x+'px';m.style.top=y+'px';
@@ -1021,7 +1045,7 @@ function slideMenu(sid,rect){
     ({rename:()=>{goSlide(sid);setTimeout(()=>{const t=document.querySelector('[data-st="title"]');if(t){t.focus();t.select();}},50);},
       dup:()=>dupSlide(sid),copy:()=>copySlide(sid),paste:()=>{if(curSlide!==sid)goSlide(sid);dupSlide(null,readClip('slide'));},
       up:()=>moveSlide(sid,-1),down:()=>moveSlide(sid,1),
-      mvf:()=>{const d=getDoc('slides',sid);if(d)edit('slides',sid,{...clone(d),fight:a.dataset.f||null});},
+      mvf:()=>{const d=getDoc('slides',sid);if(d){edit('slides',sid,{...clone(d),sgroup:a.dataset.f||null});if(sid===curSlide)setViewGroup(a.dataset.f||'');renderSlides();}},
       del:()=>confirmBox(`Delete “${esc((getDoc('slides',sid)||{}).title||'this slide')}” for everyone? You can undo with Ctrl+Z.`,'Delete slide',()=>delSlide(sid))})[a.dataset.m]();};
 }
 function closeMenu(){const m=$('menu');if(m)m.remove();}
@@ -1157,7 +1181,7 @@ function buildInsp(){
     const rowsHTML=(L,empty)=>L.length?(isPull(sl)&&!newestFirst?[...L].sort((a,b)=>((a.at||0)-(b.at||0))||((a.z||0)-(b.z||0))):isPull(sl)?[...L].sort((a,b)=>((b.at||0)-(a.at||0))||((b.z||0)-(a.z||0))):[...L].reverse()).map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
           const t0=pullT0(items),on=s.auto?!!s.pinned:s.visible!==false;
           return `<li data-lsel="${s.id}" class="${s.auto&&distOf(s)?'dist-'+distOf(s):''}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span>${s.auto?distBadge(s):''}<span class="ty">${s.auto?fmtT((s.at||t0)-t0):s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'} (or middle-click the row)">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join(''):`<li class="note" style="cursor:default">${empty}</li>`;
-    sp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>Slide</h2>${txtRow('title','Slide title','data-st')}${!isPull(sl)&&fightsSorted().length?selRow('fight','Fight',[['','— none —'],...fightsSorted().map(f=>[f.id,f.name||'Fight'])],'data-st'):''}
+    sp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>Slide</h2>${txtRow('title','Slide title','data-st')}${!isPull(sl)&&sGroups().length?selRow('sgroup','Group',[['','— none —'],...sGroups().map(g=>[g.id,g.name])],'data-st'):''}
       <div class="chks">${chk('showTitle','Show title on arena','data-a')}${chk('anim','Animated slide (timeline)','data-st')}</div>
       ${sl.anim?numRow('animLen','Length (s)',1,1,180,'data-st')+numRow('moveSpeed','Move speed (y/s)',.5,0,12,'data-st')+'<p class="note">Length 0 = automatic. Move speed 6 = in-game run speed; 0 = players arrive exactly at each waypoint’s time.</p>':''}
       ${sl.anim?'<p class="note">Use the timeline under the arena. Dragging a shape while the playhead isn’t at 0 records where it moves to at that moment; set when AoEs appear and go off in each shape’s Timing.</p>':''}
@@ -1264,7 +1288,7 @@ function syncInsp(except,force){
     const ds=s.debuffs||[];insp.querySelectorAll('[data-db]').forEach(el=>{if(el===act&&!force)return;const[i,f]=el.dataset.db.split(':');const d=ds[+i];if(!d)return;const v=d[f];const nv=f==='color'?(v||'#b46bff'):(v===undefined||v===null?'':String(v));if(el.value!==nv)el.value=nv;});}
   insp.querySelectorAll('[data-k],[data-a],[data-st],[data-ap]').forEach(el=>{
     if(el===except||(el===act&&!force))return;let v;
-    if(el.dataset.st)v=sl&&(el.dataset.st==='fight'?(sl.fight&&getDoc('fights',sl.fight)?sl.fight:''):el.dataset.st==='moveSpeed'?slideSpeed(sl):el.dataset.st==='animLen'?(+sl.animLen||0):sl[el.dataset.st]);
+    if(el.dataset.st)v=sl&&(el.dataset.st==='sgroup'?sGroupOf(sl):el.dataset.st==='moveSpeed'?slideSpeed(sl):el.dataset.st==='animLen'?(+sl.animLen||0):sl[el.dataset.st]);
     else if(el.dataset.a)v=A[el.dataset.a]??(el.dataset.a==='w'?40:el.dataset.a==='h'?30:undefined);
     else if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const pt=(A.parts||[])[+i];v=pt?pt[k]:undefined;}
     else{if(!s)return;const k=el.dataset.k;if(k==='pd'||k==='pa'){const p=polar(s);v=k==='pd'?p.d:p.a;}else v=withStats(s)[k];if(k==='stroke'&&v===undefined)v=true;if(k==='visible'&&v===undefined)v=true;}
@@ -1298,7 +1322,7 @@ insp.addEventListener('input',e=>{
   if(el.dataset.roster!==undefined||el.dataset.showjobs!==undefined){const r=clone(metaDoc('roster'));r.id='roster';r.map={...(r.map||{})};
     if(el.dataset.roster){if(v)r.map[el.dataset.roster]=v;else delete r.map[el.dataset.roster];}else r.showJobs=!!v;edit('meta','roster',r);scheduleThumbs();return;}
   const sl=curSlideDoc();if(!sl)return;
-  if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:v});scheduleThumbs();return;}
+  if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:el.dataset.st==='sgroup'?(v||null):v});if(el.dataset.st==='sgroup'){setViewGroup(v||'');renderSlides();}scheduleThumbs();return;}
   if(el.dataset.a){setEditArena(sl,{...editArena(sl),[el.dataset.a]:v});syncInsp(el);return;}
   if(el.dataset.phfrom!==undefined)return;
   if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const ar=editArena(sl),parts=clone(ar.parts||[]);if(!parts[+i])return;parts[+i][k]=v;setEditArena(sl,{...ar,parts});syncInsp(el);return;}
