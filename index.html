@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v39</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v40</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -318,7 +318,7 @@ const FIELDS={
   ink:[N('width','Thickness',.05,.05,3)],
 };
 const TYPE_LABEL={circle:'Circle',donut:'Donut',rect:'Rectangle / Line',cone:'Cone',cross:'Cross',star:'Star (8-way)',tether:'Tether',arrow:'Arrow',tower:'Tower',boss:'Boss',marker:'Player',waymark:'Waymark',text:'Text',ink:'Pen stroke'};
-const DEFAULT_ARENA={shape:'circle',radius:20,cx:100,cy:100,margin:4,bg:'#070d1f',floor:'#1a2b5c',floor2:'#0d1838',edge:'#5fd3ff',
+const DEFAULT_ARENA={imgClip:true,imgOp:1,shape:'circle',radius:20,cx:100,cy:100,margin:4,bg:'#070d1f',floor:'#1a2b5c',floor2:'#0d1838',edge:'#5fd3ff',
   grid:true,gridStep:1,rings:true,spokes:true,cardinals:true,clip:true,snap:0.5,showTitle:true};
 const ICON={
   select:'<path d="M5 3l12 8-5.5 1.2L14 18l-2.3 1-2.6-5.7L5 17z" fill="currentColor"/>',
@@ -446,7 +446,7 @@ function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
 const COORD_MIN=-200,COORD_MAX=400;
 const LIMITS={x:[COORD_MIN,COORD_MAX],y:[COORD_MIN,COORD_MAX],cx:[COORD_MIN,COORD_MAX],cy:[COORD_MIN,COORD_MAX],
   radius:[0,150],r:[0,150],w:[0,200],h:[0,200],width:[0,200],length:[0,200],inner:[0,150],outer:[0,150],
-  trackExtra:[-50,50],minD:[0,300],maxD:[0,300],moveSpeed:[0,30],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
+  trackExtra:[-50,50],minD:[0,300],maxD:[0,300],moveSpeed:[0,30],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],imgX:[COORD_MIN,COORD_MAX],imgY:[COORD_MIN,COORD_MAX],imgW:[1,400],imgRot:[-360,360],imgOp:[0,1],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
 function lim(k,v){const L=LIMITS[k];return L&&typeof v==='number'?clamp(v,L[0],L[1]):v;}
 function arenaOf(sl){const A={...DEFAULT_ARENA,...((sl&&sl.arena)||{})};
   for(const k of['cx','cy','margin','gridStep','snap','w','h'])if(typeof A[k]==='number')A[k]=lim(k,A[k]);
@@ -599,6 +599,16 @@ function tetherSVG(s,live,k){
 }
 // team jobs: board-wide label -> job map, uploaded icons, and the show-jobs switch
 function metaDoc(id){return getDoc('meta',id)||{};}
+// arena background pictures: stored once as meta/img_<id>, shown through short blob: URLs
+const _imgURL=new Map();let bgAlign=null;
+function bgImgDoc(id){const d=id&&getDoc('meta','img_'+id);return d&&d.data?d:null;}
+function bgImgURL(id){const d=bgImgDoc(id);if(!d)return null;const u=_imgURL.get(id);if(u&&u.d===d.data)return u.url;
+  try{const i=d.data.indexOf(','),mime=(d.data.slice(0,i).match(/data:([^;]+)/)||[])[1]||'image/jpeg',bin=atob(d.data.slice(i+1)),arr=new Uint8Array(bin.length);for(let k=0;k<bin.length;k++)arr[k]=bin.charCodeAt(k);
+    const url=URL.createObjectURL(new Blob([arr],{type:mime}));if(u)URL.revokeObjectURL(u.url);_imgURL.set(id,{d:d.data,url});return url;}catch(e){return null;}}
+function readPhoto(file){return new Promise((res,rej)=>{const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{URL.revokeObjectURL(url);
+  let out=null;for(const [M,q] of [[2048,.85],[1600,.8],[1200,.75],[900,.7]]){const k=Math.min(1,M/Math.max(img.width,img.height)),w=Math.max(1,Math.round(img.width*k)),h=Math.max(1,Math.round(img.height*k));
+    const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);out={data:c.toDataURL('image/jpeg',q),w,h};if(out.data.length<1.4e6)break;}
+  res(out);};img.onerror=()=>{URL.revokeObjectURL(url);rej();};img.src=url;});}
 function sGroups(){const l=metaDoc('sgroups').list||{};return Object.entries(l).filter(([,g])=>g).map(([id,g])=>({id,name:g.name||'Group',order:g.order||0})).sort((a,b)=>a.order-b.order||(a.id<b.id?-1:1));}
 function sGroupOf(sl){const g=sl&&sl.sgroup;return g&&(metaDoc('sgroups').list||{})[g]?g:'';}
 let viewGroup=lsGet('ffxiv-view-group');
@@ -736,6 +746,8 @@ function buildSlideSVG(sl,items,o){
   // edge: thick stroke under the floor fill leaves only the outer outline of the union visible
   s+=`<g filter="url(#${P}gl)">${adds.map(p=>partSVG(p,`fill="none" stroke="${A.edge}" stroke-width="0.6"`)).join('')}</g>`;
   s+=adds.map(p=>partSVG(p,`fill="url(#${P}fg)"`)).join('');
+  if(A.img){const u=bgImgURL(A.img),d=bgImgDoc(A.img);if(u){const w=+A.imgW||40,h=w*((d.h&&d.w)?d.h/d.w:1),X=A.imgX??cx,Y=A.imgY??cy;
+    s+=`<g${A.imgClip!==false?` mask="url(#${P}cl)"`:''} pointer-events="none"><image href="${u}" x="${X-w/2}" y="${Y-h/2}" width="${w}" height="${h}" preserveAspectRatio="none" opacity="${A.imgOp??1}" transform="rotate(${+A.imgRot||0} ${X} ${Y})"/></g>`;}}
   if(cuts.length)s+=`<g>${cuts.map(p=>partSVG(p,`fill="${A.bg}"`)).join('')}</g><g mask="url(#${P}cl)"><g filter="url(#${P}gl)">${cuts.map(p=>partSVG(p,`fill="none" stroke="${A.edge}" stroke-width="0.6"`)).join('')}</g></g>`;
   let g='';
   if(A.grid&&A.gridStep>0&&!o.thumb){const st=A.gridStep,n=Math.min(150,Math.ceil((B.h+Math.max(Math.abs(B.cx-cx),Math.abs(B.cy-cy))+1)/st));
@@ -758,7 +770,8 @@ function buildSlideSVG(sl,items,o){
   return s;
 }
 function exportSVG(sl,size){const B=arenaBox(arenaOf(sl)),h=B.h,_t=sl.id===curSlide?playT:0;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${B.cx-h} ${B.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'x'+sl.id,thumb:false,live:false,t:_t})}</svg>`;}
+  let out=`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${B.cx-h} ${B.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,slideItems(sl.id),{pre:'x'+sl.id,thumb:false,live:false,t:_t})}</svg>`;
+  for(const u of _imgURL.values())if(out.includes(u.url))out=out.split(u.url).join(u.d);return out;}
 
 // items as displayed (my drag + peers' live drags applied)
 function displayItems(){
@@ -787,6 +800,7 @@ function renderStage(){
     if(Array.isArray(pr.sel))for(const id of pr.sel.slice(0,40)){const it=items.find(i=>i.id===id);if(it)ov+=`<circle cx="${it.x}" cy="${it.y}" r="${.75*k}" fill="none" stroke="${col}" stroke-width="${.14*k}" stroke-dasharray="${.3*k} ${.18*k}" pointer-events="none"/>`;}
     if(pr.ink&&Array.isArray(pr.ink.p)&&pr.ink.p.length){const o=pr.ink.o||[0,0];ov+=`<path transform="translate(${+o[0]||0} ${+o[1]||0})" d="${smoothPath(pr.ink.p.filter(q=>Array.isArray(q)).map(q=>[+q[0]||0,+q[1]||0]))}" fill="none" stroke="${/^#[0-9a-f]{3,8}$/i.test(pr.ink.c)?pr.ink.c:col}" stroke-width="${clamp(+pr.ink.w||.35,.02,3)}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>`;}
   }
+  if(bgAlign)bgAlign.pts.forEach((q,i)=>{ov+=`<g pointer-events="none" stroke="#ffd43b" stroke-width="${.12*k}" fill="none"><circle cx="${q.x}" cy="${q.y}" r="${.7*k}"/><line x1="${q.x-1.2*k}" y1="${q.y}" x2="${q.x+1.2*k}" y2="${q.y}"/><line x1="${q.x}" y1="${q.y-1.2*k}" x2="${q.x}" y2="${q.y+1.2*k}"/></g><text x="${q.x+.9*k}" y="${q.y-.9*k}" font-size="${1.1*k}" font-family="${FONT}" font-weight="700" fill="#ffd43b" stroke="#000" stroke-width="${.15*k}" paint-order="stroke" pointer-events="none">${i+1}</text>`;});
   // my selection
   for(const id of selIds){const it=items.find(i=>i.id===id);if(!it)continue;
     ov+=`<g pointer-events="none"><circle cx="${it.x}" cy="${it.y}" r="${.55*k}" fill="none" stroke="#5fd3ff" stroke-width="${.1*k}"/><line x1="${it.x-.9*k}" y1="${it.y}" x2="${it.x+.9*k}" y2="${it.y}" stroke="#5fd3ff" stroke-width="${.07*k}"/><line x1="${it.x}" y1="${it.y-.9*k}" x2="${it.x}" y2="${it.y+.9*k}" stroke="#5fd3ff" stroke-width="${.07*k}"/></g>`;
@@ -831,7 +845,7 @@ function inkBBox(it){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of it.pts||[[
 // thumbnails
 let tq=null;function scheduleThumbs(){clearTimeout(tq);tq=setTimeout(renderSlides,220);}
 const _thumbCache=new Map();
-function thumbSVG(sl){const items=slideItems(sl.id);const sig=ser(sl)+'|'+ser(metaDoc('actions'))+'|'+ser(metaDoc('roster'))+'|'+ser(metaDoc('icons'))+'|'+items.map(ser).join(',');
+function thumbSVG(sl){const items=slideItems(sl.id);const sig=ser(sl)+(sl.arena&&sl.arena.img&&bgImgDoc(sl.arena.img)?'|I':'')+'|'+ser(metaDoc('actions'))+'|'+ser(metaDoc('roster'))+'|'+ser(metaDoc('icons'))+'|'+items.map(ser).join(',');
   const c=_thumbCache.get(sl.id);if(c&&c.sig===sig)return c.svg;const B=arenaBox(arenaOf(sl)),h=B.h;
   const svg=`<svg viewBox="${B.cx-h} ${B.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,items,{pre:'t'+sl.id,thumb:true,live:false})}</svg>`;_thumbCache.set(sl.id,{sig,svg});return svg;}
 // keep existing DOM nodes when their HTML hasn't changed (no flicker, scroll position stays put)
@@ -1204,6 +1218,10 @@ function buildInsp(){
         ${numRow(i+':x','X',.5,0,200,'data-ap')}${numRow(i+':y','Y',.5,0,200,'data-ap')}
         ${pt.type==='rect'?numRow(i+':w','Width',.5,0,100,'data-ap')+numRow(i+':h','Height',.5,0,100,'data-ap')+numRow(i+':rot','Rotation °',1,-180,180,'data-ap'):numRow(i+':r','Radius',.5,0,60,'data-ap')}</div>`).join('')}
       <div class="btnrow"><button data-act="addPartCircle">+ Circle piece</button><button data-act="addPartRect">+ Rectangle piece</button></div>
+      <h2 style="margin-top:12px">Background picture</h2>
+      ${A.img&&bgImgDoc(A.img)?numRow('imgX','Center X',.25,60,140,'data-a')+numRow('imgY','Center Y',.25,60,140,'data-a')+numRow('imgW','Width (y)',.25,5,120,'data-a')+numRow('imgRot','Rotation °',.5,-180,180,'data-a')+numRow('imgOp','Opacity',.05,0,1,'data-a')+'<div class="chks">'+chk('imgClip','Only show inside the arena','data-a')+'</div>'
+        :(A.img?'<p class="note">Loading picture…</p>':'<p class="note">Put a screenshot or photo of the real arena floor under the diagram. Then line it up with “Align by 2 points”, or with the sliders.</p>')}
+      <div class="btnrow"><button ${A.img?'':'class="pri" '}data-act="bgImport">${A.img?'Replace picture…':'Import picture…'}</button>${A.img?'<button class="pri" data-act="bgAlign">Align by 2 points</button><button data-act="bgFit">Fit to arena</button><button data-act="bgAll">'+(isPull(sl)?'Use on all pulls of this fight':'Use on all slides in this group')+'</button><button data-act="bgRemove">Remove</button>':''}</div>
       <div class="btnrow"><button data-act="copyArena">Copy arena</button>${readClip('arena')?'<button data-act="pasteArena">Paste arena</button>':''}</div>
       ${isPull(sl)&&sl.fight&&getDoc('fights',sl.fight)?`<div class="btnrow"><button class="pri" data-act="fightArena">Use for new pulls of ${esc(getDoc('fights',sl.fight).name)}</button><button data-act="fightArenaAll">Apply to all its pulls</button></div>`:''}</div>
       <div class="sect"><h2>Guides</h2><div class="chks">${chk('grid','Grid','data-a')}${chk('rings','5y rings','data-a')}${chk('spokes','8-way spokes','data-a')}${chk('cardinals','N/E/S/W','data-a')}${chk('clip','Clip AoEs to arena','data-a')}</div>
@@ -1376,6 +1394,18 @@ function action(a){
     case'addPartCircle':case'addPartRect':{if(!sl)return;const ar=editArena(sl),B=arenaBox(ar),parts=clone(ar.parts||[]);
       parts.push(a==='addPartRect'?{type:'rect',x:r2(B.cx),y:r2(B.cy+B.in),w:10,h:16,rot:0,cut:false}:{type:'circle',x:r2(B.cx+B.in),y:r2(B.cy),r:8,cut:false});
       setEditArena(sl,{...ar,parts});setTimeout(buildInsp);return;}
+    case'bgImport':if(sl){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;toast('Loading picture…');
+        try{const ph=await readPhoto(f),id=uid(),cur=curSlideDoc();if(!cur)return;edit('meta','img_'+id,{id:'img_'+id,data:ph.data,w:ph.w,h:ph.h,name:String(f.name||'').slice(0,80)});
+          const A=editArena(cur),old=A.img&&bgImgDoc(A.img);setEditArena(cur,{...A,img:id,...(old?{}:bgFitVals(A,ph.w,ph.h))});toast('Picture added — use “Align by 2 points” to line it up');setTimeout(buildInsp,50);}
+        catch(e){toast('Could not read that picture');}};inp.click();}return;
+    case'bgFit':if(sl){const A=editArena(sl),d=bgImgDoc(A.img);if(d)setEditArena(sl,{...A,...bgFitVals(A,d.w,d.h)});setTimeout(buildInsp);}return;
+    case'bgRemove':if(sl){const A=editArena(sl);setEditArena(sl,{...A,img:null});setTimeout(buildInsp);}return;
+    case'bgAlign':if(sl){bgAlign={pts:[]};svg.style.cursor='crosshair';toast('Click a spot on the picture you know (e.g. the north edge, or waymark A). Esc cancels.');}return;
+    case'bgAll':if(sl){const A=editArena(sl),pick={img:A.img,imgX:A.imgX,imgY:A.imgY,imgW:A.imgW,imgRot:A.imgRot,imgOp:A.imgOp,imgClip:A.imgClip};
+        const others=isPull(sl)?pullsOf(sl.fight||''):slidesManual().filter(x=>sGroupOf(x)===sGroupOf(sl));let n=0;
+        others.forEach(x=>{if(x.id===sl.id)return;n++;edit('slides',x.id,{...clone(x),arena:{...(x.arena||{}),...pick},arenaPhases:Array.isArray(x.arenaPhases)?x.arenaPhases.map(p=>({...p,arena:{...(p.arena||{}),...pick}})):x.arenaPhases});});
+        if(isPull(sl)&&sl.fight){const f=getDoc('fights',sl.fight);if(f&&f.arena)edit('fights',f.id,{...clone(f),arena:{...f.arena,...pick}});}
+        toast(`Picture applied to ${n} other ${isPull(sl)?'pull':'slide'}${n===1?'':'s'}`);}return;
     case'copyArena':if(sl){writeClip('arena',clone(editArena(sl)));toast('Arena copied — open another slide and press Paste arena');buildInsp();}return;
     case'pasteArena':{const ar=readClip('arena');if(sl&&ar){setEditArena(sl,ar);fitView();setTimeout(buildInsp);toast('Arena pasted');}return;}
     case'fightArena':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl)),arenaPhases:clone(sl.arenaPhases||[])});toast(`New pulls in ${f.name} will use this arena`);}return;}
@@ -1414,6 +1444,26 @@ function action(a){
 
 // ================= canvas interaction =================
 const svg=$('stage');
+function bgFitVals(A,w,h){const B=arenaBox(A),D=2*Math.max(B.in,1),W=w<=h?D:D*w/h;return{imgX:B.cx,imgY:B.cy,imgW:Math.round(W*100)/100,imgRot:0};}
+function bgAlignCancel(){bgAlign=null;svg.style.cursor='';scheduleRender();}
+function bgAlignAsk(){const sl=curSlideDoc();if(!sl){bgAlignCancel();return;}const A=editArena(sl),B=arenaBox(A),r=Math.round(B.in*100)/100,c=[B.cx,B.cy];
+  const spots=[['n','North edge',c[0],c[1]-r],['e','East edge',c[0]+r,c[1]],['s','South edge',c[0],c[1]+r],['w','West edge',c[0]-r,c[1]],['c','Center',c[0],c[1]],['','Custom…']];
+  const row=(i,def)=>`<div class="row two"><label>Spot ${i+1} is</label><select id="baS${i}">${spots.map(o=>`<option value="${o[0]}"${o[0]===def?' selected':''}>${o[1]}</option>`).join('')}</select></div>
+    <div class="row two"><label>X / Y</label><div style="display:flex;gap:6px"><input type="number" step="0.25" id="baX${i}"><input type="number" step="0.25" id="baY${i}"></div></div>`;
+  openModal(`<h2>Align picture</h2><p class="note">Where are the two spots you clicked in the arena? Pick a preset or type game coordinates (center ${c[0]}, ${c[1]}; +Y is south). Spots far apart give the best result.</p>${row(0,'n')}${row(1,'s')}
+    <div class="btnrow"><button class="pri" id="baOk">Align</button><button id="baRe">Click again</button><button data-close>Cancel</button></div>`);
+  const put=i=>{const o=spots.find(o=>o[0]===$('baS'+i).value);if(o&&o[0]){$('baX'+i).value=o[2];$('baY'+i).value=o[3];}};
+  for(const i of[0,1]){put(i);$('baS'+i).onchange=()=>put(i);$('baX'+i).oninput=$('baY'+i).oninput=()=>{$('baS'+i).value='';};}
+  $('baRe').onclick=()=>{closeModal();bgAlign={pts:[]};svg.style.cursor='crosshair';scheduleRender();toast('Click the first spot again');};
+  $('modal').querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',bgAlignCancel));
+  $('baOk').onclick=()=>{const [p1,p2]=bgAlign.pts,t1={x:+$('baX0').value,y:+$('baY0').value},t2={x:+$('baX1').value,y:+$('baY1').value};
+    const vx=p2.x-p1.x,vy=p2.y-p1.y,ux=t2.x-t1.x,uy=t2.y-t1.y,lv=Math.hypot(vx,vy),lu=Math.hypot(ux,uy);
+    if(lv<.2||lu<.2||![t1.x,t1.y,t2.x,t2.y].every(Number.isFinite)){toast('Pick two different spots');return;}
+    const sc=lu/lv,da=Math.atan2(uy,ux)-Math.atan2(vy,vx),co=Math.cos(da),si=Math.sin(da),cur=curSlideDoc();if(!cur)return;const A2=editArena(cur);
+    const X=A2.imgX??A2.cx,Y=A2.imgY??A2.cy,dx=X-p1.x,dy=Y-p1.y,r2=v=>Math.round(v*100)/100;
+    let rot=(+A2.imgRot||0)+da*180/Math.PI;rot=((rot+180)%360+360)%360-180;
+    setEditArena(cur,{...A2,imgX:r2(t1.x+sc*(co*dx-si*dy)),imgY:r2(t1.y+sc*(si*dx+co*dy)),imgW:r2((+A2.imgW||40)*sc),imgRot:r2(rot)});
+    bgAlign=null;svg.style.cursor='';closeModal();setTimeout(buildInsp);scheduleRender();toast('Picture aligned');};}
 function toWorld(e){const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const m=svg.getScreenCTM();return m?p.matrixTransform(m.inverse()):{x:0,y:0};}
 // topmost item under the pointer, but a selected item wins if it is anywhere under the pointer
 // is a world point on the visible arena floor (pieces minus holes)?
@@ -1427,6 +1477,9 @@ function hitItems(e){const pt=toWorld(e),on=onArena(pt.x,pt.y),clip=arenaAt(curS
   return out;}
 function itemAtPreferSel(e){const hs=hitItems(e);return hs.find(it=>selIds.includes(it.id))||hs[0]||null;}
 function itemAt(e){return hitItems(e)[0]||null;}
+svg.addEventListener('pointerdown',e=>{if(!bgAlign||e.button!==0)return;e.stopPropagation();e.preventDefault();
+  if(bgAlign.pts.length<2){const p=toWorld(e);bgAlign.pts.push({x:p.x,y:p.y});scheduleRender();if(bgAlign.pts.length===1)toast('Now click a second spot, far from the first (e.g. the south edge)');else bgAlignAsk();}},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&bgAlign){bgAlignCancel();closeModal();}},true);
 svg.addEventListener('pointerdown',e=>{
   if(!curSlide)return;closeMenu();
   const pt=toWorld(e);
