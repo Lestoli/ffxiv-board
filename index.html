@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v40</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v41</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -624,7 +624,15 @@ let _svgPre='L';
 const STAT_KEYS=new Set(['radius','angle','inner','outer','width','length','count']);
 function actionMap(){const m=metaDoc('actions').map;return m&&typeof m==='object'?m:{};}
 const actionKey=it=>it&&it.auto&&!it.ownStats&&it.ev&&it.ev.actionId!==undefined&&it.ev.actionId!==''?'a'+it.ev.actionId:null;
-function withStats(it){const k=actionKey(it);if(!k)return it;const o=actionMap()[k];return o?{...it,...o}:it;}
+// board-wide look for attacks from pulls (the relay sends its own default colours; those get swapped for these)
+const PULL_STYLE_DEF={cast:'#ff8a2b',castOp:.42,effect:'#ff3b3b',effectOp:.42,bigOp:.14,outline:true};
+const RELAY_COL={cast:'#ff8a2b',effect:'#ff3b3b'};
+function pullStyle(){return{...PULL_STYLE_DEF,...metaDoc('pullstyle')};}
+function autoStyled(it){if(!it.auto||!it.ev)return it;const t=it.ev.type==='cast'?'cast':'effect',P=pullStyle(),o={};
+  const relayCol=RELAY_COL[it.ev.type]||'#ffd43b';if(!it.color||String(it.color).toLowerCase()===relayCol)o.color=P[t];
+  if(it.opacity===undefined||it.opacity===.14||it.opacity===.42)o.opacity=(+it.ev.len>=30)?P.bigOp:P[t+'Op'];
+  if(it.stroke===true||it.stroke===undefined)o.stroke=!!P.outline;return{...it,...o};}
+function withStats(it){it=autoStyled(it);const k=actionKey(it);if(!k)return it;const o=actionMap()[k];return o?{...it,...o}:it;}
 function setActionStat(it,k,v){const key=actionKey(it);if(!key)return false;const m=clone(metaDoc('actions'));m.id='actions';m.map={...(m.map||{})};m.map[key]={...(m.map[key]||{}),[k]:v};edit('meta','actions',m);return true;}
 const sameActionCount=it=>{const key=actionKey(it);if(!key)return 0;let n=0;for(const x of allDocs('items').values())if(actionKey(x)===key)n++;return n;};
 // ===== animated slides: timing, telegraphs, movement keyframes, debuff timers =====
@@ -845,7 +853,7 @@ function inkBBox(it){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of it.pts||[[
 // thumbnails
 let tq=null;function scheduleThumbs(){clearTimeout(tq);tq=setTimeout(renderSlides,220);}
 const _thumbCache=new Map();
-function thumbSVG(sl){const items=slideItems(sl.id);const sig=ser(sl)+(sl.arena&&sl.arena.img&&bgImgDoc(sl.arena.img)?'|I':'')+'|'+ser(metaDoc('actions'))+'|'+ser(metaDoc('roster'))+'|'+ser(metaDoc('icons'))+'|'+items.map(ser).join(',');
+function thumbSVG(sl){const items=slideItems(sl.id);const sig=ser(sl)+(sl.arena&&sl.arena.img&&bgImgDoc(sl.arena.img)?'|I':'')+'|'+ser(metaDoc('actions'))+'|'+ser(metaDoc('pullstyle'))+'|'+ser(metaDoc('roster'))+'|'+ser(metaDoc('icons'))+'|'+items.map(ser).join(',');
   const c=_thumbCache.get(sl.id);if(c&&c.sig===sig)return c.svg;const B=arenaBox(arenaOf(sl)),h=B.h;
   const svg=`<svg viewBox="${B.cx-h} ${B.cy-h} ${2*h} ${2*h}">${buildSlideSVG(sl,items,{pre:'t'+sl.id,thumb:true,live:false})}</svg>`;_thumbCache.set(sl.id,{sig,svg});return svg;}
 // keep existing DOM nodes when their HTML hasn't changed (no flicker, scroll position stays put)
@@ -879,7 +887,7 @@ function renderSlides(){
      <div class="secOpts"><select id="fightSel" style="width:100%">${opts}</select>
        ${fs.length?(rec?'<span style="color:#ff8a8a">● Recording new pulls into this fight</span>':(sf&&canWrite?`<button data-recfight="${sf}" style="padding:3px 8px">Record new pulls into this fight</button>`:'')):'<span>Click “+ New fight” to group pulls by fight.</span>'}
        <label class="chk"><input type="checkbox" id="pFollow" ${followPulls?'checked':''}>Jump to new pulls</label>
-       <button data-srcfilter style="padding:3px 8px">Hide attacks from…</button>
+       <div style="display:flex;gap:6px;flex-wrap:wrap"><button data-srcfilter style="padding:3px 8px">Hide attacks from…</button><button data-pullstyle style="padding:3px 8px">Attack colors…</button></div>
        <label>Show attacks for <input type="number" id="pSecs" min="0.5" max="60" step="0.5" value="${showSecs}"> s</label>
        ${canWrite&&fp.length?`<button data-clearpulls style="padding:3px 8px">Clear ${fp.length} pull${fp.length===1?'':'s'}</button>`:''}</div></div>`},
       ...(fp.length?fp.map(sl=>({key:sl.id,html:card(sl,'#'+(sl.pull||'?'))})):[{key:'empty',html:'<div class="note">New pulls appear here automatically while the relay is running.</div>'}])];})());
@@ -1041,6 +1049,7 @@ $('leftCols').addEventListener('change',e=>{
 });
 $('leftCols').addEventListener('click',e=>{
   if(e.target.closest('[data-srcfilter]')){e.stopPropagation();sourcesBox();return;}
+  if(e.target.closest('[data-pullstyle]')){e.stopPropagation();pullStyleBox();return;}
   const nf=e.target.closest('[data-newfight]');if(nf){e.stopPropagation();newFightBox();return;}
   const rf=e.target.closest('[data-recfight]');if(rf){e.stopPropagation();const f=getDoc('fights',rf.dataset.recfight);if(f){edit('fights',f.id,{...clone(f),activeAt:Date.now()});toast(`New pulls will go into ${f.name}`);}return;}
   const fm=e.target.closest('[data-fightmenu]');if(fm){e.stopPropagation();fightMenu(fm.dataset.fightmenu,fm.getBoundingClientRect());return;}
@@ -1094,6 +1103,19 @@ function sourcesBox(){
   $('modalBox').addEventListener('change',e=>{const n=e.target.dataset.hsrc;if(n!==undefined){const f=clone(metaDoc('filters'));f.id='filters';f.hide={...(f.hide||{}),[n]:e.target.checked};edit('meta','filters',f);}
     if(e.target.id==='showHid'){showHiddenSrc=e.target.checked;dataVer++;renderAll();}});
 }
+function pullStyleBox(){const P=pullStyle(),ro=canWrite?'':' disabled';
+  const row=(k,l)=>`<div class="row two"><label>${l}</label><div style="display:flex;gap:8px;align-items:center"><input type="color" data-ps="${k}" value="${P[k]}" style="width:44px;padding:0;height:26px"${ro}><input type="range" data-ps="${k}Op" min="0" max="1" step="0.02" value="${P[k+'Op']}" style="flex:1"${ro}><span class="note" style="margin:0;width:34px" data-psv="${k}Op">${Math.round(P[k+'Op']*100)}%</span></div></div>`;
+  openModal(`<h2>Attack colors</h2><p class="note">How attacks from the game look on every pull slide, for everyone on this board. Attacks you’ve recoloured yourself keep their own colour.</p>
+    ${row('cast','Casts (telegraphs)')}${row('effect','Hits (effects)')}
+    <div class="row two"><label>Big AoEs (30y+)</label><div style="display:flex;gap:8px;align-items:center"><span style="width:44px"></span><input type="range" data-ps="bigOp" min="0" max="1" step="0.02" value="${P.bigOp}" style="flex:1"${ro}><span class="note" style="margin:0;width:34px" data-psv="bigOp">${Math.round(P.bigOp*100)}%</span></div></div>
+    <p class="note" style="margin-top:0">Raid-wides and huge shapes use this opacity so they don’t hide the arena.</p>
+    <div class="chks"><label class="chk"><input type="checkbox" data-ps="outline" ${P.outline?'checked':''}${ro}>Outline shapes</label></div>
+    <div class="btnrow">${canWrite?'<button data-psreset>Reset to default</button>':''}<span style="flex:1"></span><button data-close class="pri">Done</button></div>`);
+  const box=$('modalBox');
+  const save=(k,v)=>{const d={...clone(metaDoc('pullstyle')),id:'pullstyle',[k]:v};edit('meta','pullstyle',d);};
+  box.addEventListener('input',e=>{const k=e.target.dataset.ps;if(!k||!canWrite)return;const v=e.target.type==='checkbox'?e.target.checked:e.target.type==='range'?+e.target.value:e.target.value;
+    const lab=box.querySelector(`[data-psv="${k}"]`);if(lab)lab.textContent=Math.round(v*100)+'%';save(k,v);dataVer++;scheduleRender();});
+  const rs=box.querySelector('[data-psreset]');if(rs)rs.onclick=()=>{edit('meta','pullstyle',{id:'pullstyle'});closeModal();setTimeout(pullStyleBox,50);};}
 function newFightBox(){
   const n=fightsSorted().length+1,cur=curSlideDoc();
   openModal(`<h2>New fight</h2><p class="note">Pulls from now on go into this fight, numbered from Pull #1.</p>
@@ -1192,7 +1214,7 @@ function buildInsp(){
   {
     const items=slideItems(curSlide);
     const isUnit=t=>t==='marker'||t==='waymark'||t==='boss';
-    const rowsHTML=(L,empty)=>L.length?(isPull(sl)&&!newestFirst?[...L].sort((a,b)=>((a.at||0)-(b.at||0))||((a.z||0)-(b.z||0))):isPull(sl)?[...L].sort((a,b)=>((b.at||0)-(a.at||0))||((b.z||0)-(a.z||0))):[...L].reverse()).map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:s.color;
+    const rowsHTML=(L,empty)=>L.length?(isPull(sl)&&!newestFirst?[...L].sort((a,b)=>((a.at||0)-(b.at||0))||((a.z||0)-(b.z||0))):isPull(sl)?[...L].sort((a,b)=>((b.at||0)-(a.at||0))||((b.z||0)-(a.z||0))):[...L].reverse()).map(s=>{const c=s.type==='marker'?ROLE_COL[s.role]:s.type==='waymark'?WM_COL[s.mark]:autoStyled(s).color;
           const t0=pullT0(items),on=s.auto?!!s.pinned:s.visible!==false;
           return `<li data-lsel="${s.id}" class="${s.auto&&distOf(s)?'dist-'+distOf(s):''}"><span class="sw" style="background:${c}"></span><span class="nm">${esc(s.name||TYPE_LABEL[s.type])}</span>${s.auto?distBadge(s):''}<span class="ty">${s.auto?fmtT((s.at||t0)-t0):s.type}</span>${canWrite?`<button class="ib ${on?'act':''}" data-vis="${s.id}" title="${s.auto?'Keep showing this attack':'Show/hide'} (or middle-click the row)">${on?'●':'○'}</button><button class="ib ${s.locked?'act':''}" data-lock="${s.id}" title="Lock (ignore clicks on canvas)">${s.locked?'🔒':'🔓'}</button>`:''}</li>`;}).join(''):`<li class="note" style="cursor:default">${empty}</li>`;
     sp.innerHTML=`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>Slide</h2>${txtRow('title','Slide title','data-st')}${!isPull(sl)&&sGroups().length?selRow('sgroup','Group',[['','— none —'],...sGroups().map(g=>[g.id,g.name])],'data-st'):''}
