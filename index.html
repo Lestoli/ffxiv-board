@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v43</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v44</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -446,7 +446,7 @@ function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
 const COORD_MIN=-200,COORD_MAX=400;
 const LIMITS={x:[COORD_MIN,COORD_MAX],y:[COORD_MIN,COORD_MAX],cx:[COORD_MIN,COORD_MAX],cy:[COORD_MIN,COORD_MAX],
   radius:[0,150],r:[0,150],w:[0,200],h:[0,200],width:[0,200],length:[0,200],inner:[0,150],outer:[0,150],
-  trackExtra:[-50,50],minD:[0,300],maxD:[0,300],moveSpeed:[0,30],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],imgX:[COORD_MIN,COORD_MAX],imgY:[COORD_MIN,COORD_MAX],imgW:[1,400],imgRot:[-360,360],imgOp:[0,1],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
+  trackExtra:[-50,50],minD:[0,300],maxD:[0,300],moveSpeed:[0,30],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],imgX:[COORD_MIN,COORD_MAX],imgY:[COORD_MIN,COORD_MAX],imgW:[1,400],imgRot:[-360,360],rotOff:[-360,360],imgOp:[0,1],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
 function lim(k,v){const L=LIMITS[k];return L&&typeof v==='number'?clamp(v,L[0],L[1]):v;}
 function arenaOf(sl){const A={...DEFAULT_ARENA,...((sl&&sl.arena)||{})};
   for(const k of['cx','cy','margin','gridStep','snap','w','h'])if(typeof A[k]==='number')A[k]=lim(k,A[k]);
@@ -507,17 +507,15 @@ function afterHistory(ch,key){
 }
 function updUndo(){$('undo').disabled=!undoStack.length;$('redo').disabled=!redoStack.length;}
 
-// spin shapes around the arena's centre (e.g. treat the East spawn as North)
-function rotateItems(its,deg){const sl=curSlideDoc();if(!sl||!its.length)return 0;const B=arenaBox(arenaOf(sl)),cx=B.cx,cy=B.cy,a=deg*Math.PI/180,co=Math.cos(a),si=Math.sin(a);
-  const rp=(x,y)=>[r2(cx+co*(x-cx)-si*(y-cy)),r2(cy+si*(x-cx)+co*(y-cy))];const ids=new Set(its.map(i=>i.id));let n=0;beginGesture();
-  for(const it of its){if(it.locked||it.type==='tether')continue;
-    const follows=(it.target&&it.attach&&getDoc('items',it.target))||(it.anchorTo&&getDoc('items',it.anchorTo));const d=clone(it);
-    if(!follows){[d.x,d.y]=rp(+it.x||0,+it.y||0);if(Array.isArray(d.keys))d.keys=d.keys.map(k=>{const[x,y]=rp(+k.x||0,+k.y||0);return{...k,x,y};});}
-    if(Array.isArray(d.pts))d.pts=d.pts.map(q=>[r2(co*q[0]-si*q[1]),r2(si*q[0]+co*q[1])]);
-    if(ROTATABLE.has(it.type)&&it.type!=='text')d.rot=normRot((+it.rot||0)+deg);
-    edit('items',it.id,d);n++;}
-  endGesture();scheduleRender();return n;}
-const rotBtns=(pfx)=>`<div class="row two"><label title="Spins them around the arena's centre, e.g. so an East spawn reads as North">Rotate ${pfx}</label><div class="btnrow" style="margin:0;gap:4px">${[[-90,'⟲ 90°'],[-45,'⟲ 45°'],[45,'⟳ 45°'],[90,'⟳ 90°'],[180,'180°']].map(([d,l])=>`<button data-rotall="${d}" style="padding:3px 7px">${l}</button>`).join('')}</div></div>`;
+// per-shape "rotation offset": drawn spun around the arena centre, stored position untouched
+function arenaCtr(sl){const B=arenaBox(arenaOf(sl||curSlideDoc()));return[B.cx,B.cy];}
+function rotPt(x,y,deg,c){const a=deg*Math.PI/180,co=Math.cos(a),si=Math.sin(a);return[c[0]+co*(x-c[0])-si*(y-c[1]),c[1]+si*(x-c[0])+co*(y-c[1])];}
+function applyRotOffs(items,sl){let c=null;return items.map(it=>{const d=+it.rotOff||0;if(!d||it._ro)return it;c=c||arenaCtr(sl);const n={...it,_ro:1};
+  const follows=(it.target&&it.attach&&getDoc('items',it.target))||(it.anchorTo&&getDoc('items',it.anchorTo));
+  if(!follows)[n.x,n.y]=rotPt(+it.x||0,+it.y||0,d,c);
+  if(Array.isArray(it.pts)){const a=d*Math.PI/180,co=Math.cos(a),si=Math.sin(a);n.pts=it.pts.map(q=>[co*q[0]-si*q[1],si*q[0]+co*q[1]]);}
+  if(ROTATABLE.has(it.type)&&it.type!=='text')n.rot=normRot((+it.rot||0)+d);return n;});}
+const rotBtns=(attr)=>`${numRow('rotOff','Rotation offset °',45,-180,180,attr)}<div class="row two"><label></label><div class="btnrow" style="margin:0;gap:4px">${[[-90,'⟲ 90°'],[-45,'⟲ 45°'],[45,'⟳ 45°'],[90,'⟳ 90°'],[0,'Reset']].map(([d,l])=>`<button data-rotall="${d}" style="padding:3px 7px">${l}</button>`).join('')}</div></div><p class="note" style="margin-top:0">Spins it around the arena's centre without moving its saved spot — e.g. ⟲ 90° makes an East spawn read as North.</p>`;
 function patchItem(id,patch){const d=getDoc('items',id);if(!d)return;edit('items',id,{...clone(d),...patch});}
 
 // ================= view state =================
@@ -783,7 +781,7 @@ function buildSlideSVG(sl,items,o){
   const animOn=!!(sl&&sl.anim);_animT=animOn?(o.live?playT:(o.t||0)):null;
   if(animOn&&!o.live)items=animResolve(items,o.t||0,false,slideSpeed(sl));
   let run='';const flush=()=>{if(run){s+=`<g mask="url(#${P}cl)">${run}</g>`;run='';}};
-  for(const it of resolveTargets(items)){if(it.visible===false||(it.auto&&(o.thumb?!it.pinned:!autoShown(it))))continue;const g=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));
+  for(const it of resolveTargets(applyRotOffs(items,sl))){if(it.visible===false||(it.auto&&(o.thumb?!it.pinned:!autoShown(it))))continue;const g=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));
     if(AOE.has(it.type)&&A.clip)run+=g;else{flush();s+=g;}}
   flush();
   return s;
@@ -799,7 +797,7 @@ function displayItems(){
   for(const p of peers){if(p.isMe&&p.sameTab)continue;const d=p.presence&&p.presence.drag;if(d&&d.s===curSlide&&d.m&&typeof d.m==='object')Object.assign(ov,d.m);}
   if(Object.keys(ov).length)items=items.map(it=>{const m=ov[it.id];if(!Array.isArray(m))return it;const n={...it,x:+m[0]||it.x,y:+m[1]||it.y};if(m.length>2&&isFinite(m[2]))n.rot=+m[2];return n;});
   if(isAnimSlide())items=animResolve(items,playT,!playing);
-  return resolveTargets(items);
+  return resolveTargets(applyRotOffs(items));
 }
 
 let rq=false;function scheduleRender(){if(rq)return;rq=true;requestAnimationFrame(()=>{rq=false;renderStage();syncInsp();scheduleThumbs();});}
@@ -1234,7 +1232,7 @@ function buildInsp(){
       <div class="chks">${chk('showTitle','Show title on arena','data-a')}${chk('anim','Animated slide (timeline)','data-st')}</div>
       ${sl.anim?numRow('animLen','Length (s)',1,1,180,'data-st')+numRow('moveSpeed','Move speed (y/s)',.5,0,12,'data-st')+'<p class="note">Length 0 = automatic. Move speed 6 = in-game run speed; 0 = players arrive exactly at each waypoint’s time.</p>':''}
       ${sl.anim?'<p class="note">Use the timeline under the arena. Dragging a shape while the playhead isn’t at 0 records where it moves to at that moment; set when AoEs appear and go off in each shape’s Timing.</p>':''}
-      <div class="btnrow"><button data-act="waymarks">+ 8 waymarks</button><button data-act="party">+ Party clock spots</button></div>${slideItems(curSlide).length?rotBtns('all shapes'):''}
+      <div class="btnrow"><button data-act="waymarks">+ 8 waymarks</button><button data-act="party">+ Party clock spots</button></div>
 
       <div class="sect"><h2>Arena</h2>
       ${(()=>{const ph=(Array.isArray(sl.arenaPhases)?sl.arenaPhases:[]);const timed=isPull(sl)||sl.anim;
@@ -1283,7 +1281,7 @@ function buildInsp(){
       ${(()=>{const sets=its.map(i=>new Set((FIELDS[i.type]||[]).filter(f=>f.t==='num').map(f=>f.k)));const first=(FIELDS[its[0].type]||[]).filter(f=>f.t==='num'&&sets.every(st=>st.has(f.k)));
         return first.length?`<div class="sect"><h2>Shared settings</h2>${first.map(f=>numRow(f.k,f.l,f.step,f.min,f.max,'data-multi')).join('')}<p class="note">Blank = the selected items differ. Typing a value sets it on all of them.</p></div>`:'';})()}
       <div class="btnrow"><button data-act="mHide">Hide all</button><button data-act="mShow">Show all</button><button data-act="mLock">Lock</button><button data-act="mUnlock">Unlock</button></div>
-      ${rotBtns('around center')}
+      ${rotBtns('data-multi')}
       <div class="btnrow"><button data-act="dup">Duplicate</button><button data-act="copy">Copy</button><button data-act="del" class="danger">Delete</button><button data-act="deselect">Done</button></div>
       <p class="note">Layers: AoEs draw under waymarks, which draw under players, arrows, pen and text. Drag any selected item to move them together. Ctrl- or Shift-click shapes (or list rows) to add or remove them; Shift-click in a list selects a range.</p></fieldset>`;
   } else {
@@ -1322,7 +1320,7 @@ function buildInsp(){
         ${aimed?numRow('aimOffset','Aim offset °',1,-180,180)+'<p class="note">Rotation follows the target automatically — move the target and this shape re-aims.</p>':s.target&&s.attach?'<p class="note">This shape follows its target around.</p>':`<p class="note">${ROTATABLE.has(s.type)?'Pick a player and this shape will always aim at them.':'Pick a player and tick “stick” to make this shape follow them.'}</p>`}</div>`:''}
       <div class="sect">${hasColor?colRow('color','Color')+`<div class="swatches">${SWATCHES.map(c=>`<button data-sw="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>`:''}
         ${numRow('opacity','Opacity',.05,0,1)}${aoe||s.type==='tether'?txtRow('label','Label')+numRow('labelSize','Label size',.1,.3,6):''}
-        <div class="chks">${aoe&&!['tower','boss'].includes(s.type)?chk('stroke','Outline'):''}${chk('visible','Visible')}${chk('locked','Locked')}</div>${rotBtns('around center')}</div>
+        <div class="chks">${aoe&&!['tower','boss'].includes(s.type)?chk('stroke','Outline'):''}${chk('visible','Visible')}${chk('locked','Locked')}</div>${rotBtns('data-k')}</div>
       <div class="sect btnrow"><button data-act="top" title="Bring to front">⤒ Front</button><button data-act="up">▲</button><button data-act="down">▼</button><button data-act="bottom" title="Send to back">⤓ Back</button>
         <button data-act="dup">Duplicate</button><button data-act="copy">Copy</button><button data-act="del" class="danger">Delete</button><button data-act="deselect">Done</button></div></fieldset>`;
   }
@@ -1404,8 +1402,8 @@ insp.addEventListener('mousedown',e=>{if((e.button===1||e.shiftKey)&&e.target.cl
 insp.addEventListener('auxclick',e=>{if(e.button!==1)return;const li=e.target.closest('[data-lsel]');if(!li||!canWrite)return;e.preventDefault();
   const it=getDoc('items',li.dataset.lsel);if(!it)return;if(it.auto)patchItem(it.id,{pinned:!it.pinned,visible:true});else patchItem(it.id,{visible:it.visible===false});setTimeout(buildInsp);});
 insp.addEventListener('click',e=>{
-  const ra=e.target.closest('[data-rotall]');if(ra){if(!canWrite)return;const deg=+ra.dataset.rotall,sel=selItems(),its=sel.length?sel:slideItems(curSlide);
-    const n=rotateItems(its,deg);toast(n?`Rotated ${n} item${n===1?'':'s'} ${Math.abs(deg)}° ${deg<0?'counter-clockwise':'clockwise'}`:'Nothing to rotate (locked items stay put)');setTimeout(()=>syncInsp(null,true));return;}
+  const ra=e.target.closest('[data-rotall]');if(ra){if(!canWrite)return;const deg=+ra.dataset.rotall,its=selItems();if(!its.length)return;beginGesture();
+    its.forEach(it=>patchItem(it.id,{rotOff:deg===0?0:normRot((+it.rotOff||0)+deg)}));endGesture();scheduleRender();setTimeout(()=>syncInsp(null,true));return;}
   const sw=e.target.closest('[data-sw]');if(sw){selItems().forEach(it=>patchItem(it.id,{color:sw.dataset.sw}));return;}
   const v=e.target.closest('[data-vis]');if(v){const it=getDoc('items',v.dataset.vis);if(it){if(it.auto)patchItem(it.id,{pinned:!it.pinned,visible:true});else patchItem(it.id,{visible:it.visible===false});}setTimeout(buildInsp);return;}
   const l=e.target.closest('[data-lock]');if(l){const it=getDoc('items',l.dataset.lock);if(it)patchItem(it.id,{locked:!it.locked});setTimeout(buildInsp);return;}
@@ -1581,11 +1579,11 @@ svg.addEventListener('pointermove',e=>{
   if(drag.mode==='move'){
     let dx=pt.x-drag.px,dy=pt.y-drag.py;
     const nx=snap(drag.ax+dx),ny=snap(drag.ay+dy);dx=nx-drag.ax;dy=ny-drag.ay;
-    const m={};for(const[id,[x,y]]of Object.entries(drag.start)){const base=gest&&gest.before.get('items|'+id)||getDoc('items',id);if(!base)continue;const nx=r2(x+dx),ny=r2(y+dy);
+    const m={};for(const[id,[x,y]]of Object.entries(drag.start)){const base=gest&&gest.before.get('items|'+id)||getDoc('items',id);if(!base)continue;let nx=r2(x+dx),ny=r2(y+dy);if(+base.rotOff){const q=rotPt(nx,ny,-base.rotOff,arenaCtr());nx=r2(q[0]);ny=r2(q[1]);}
       const v=drag.anim&&(((base.keys||[]).length)||playT>.01)?{...withKey(clone(base),playT,nx,ny),_dragPos:[nx,ny]}:{...clone(base),x:nx,y:ny};local.items.set(id,v);m[id]=[nx,ny];}
     drag.moved=true;drag.m=m;sendPresence({drag:{s:curSlide,m}});scheduleRender();return;
   }
-  if(drag.mode==='rot'){const it=getDoc('items',drag.id);if(!it)return;let a=Math.atan2(pt.x-it.x,-(pt.y-it.y))*180/Math.PI;a=e.shiftKey?Math.round(a/15)*15:Math.round(a);
+  if(drag.mode==='rot'){const it=getDoc('items',drag.id);if(!it)return;const off=+it.rotOff||0,dp=off?rotPt(it.x,it.y,off,arenaCtr()):[it.x,it.y];let a=Math.atan2(pt.x-dp[0],-(pt.y-dp[1]))*180/Math.PI;a=e.shiftKey?Math.round(a/15)*15:Math.round(a);a-=off;
     local.items.set(it.id,{...clone(it),rot:normRot(a)});drag.moved=true;sendPresence({drag:{s:curSlide,m:{[it.id]:[it.x,it.y,normRot(a)]}}});scheduleRender();return;}
 });
 function endDrag(e){
@@ -1675,7 +1673,7 @@ document.addEventListener('keydown',e=>{
   const its=selItems();if(!its.length)return;
   const step=(arenaOf(curSlideDoc()).snap||.5)*(e.shiftKey?5:1);
   const mv={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
-  if(mv){e.preventDefault();its.forEach(it=>patchItem(it.id,{x:r2(it.x+mv[0]*step),y:r2(it.y+mv[1]*step)}));return;}
+  if(mv){e.preventDefault();its.forEach(it=>{const q=+it.rotOff?rotPt(mv[0],mv[1],-it.rotOff,[0,0]):mv;patchItem(it.id,{x:r2(it.x+q[0]*step),y:r2(it.y+q[1]*step)});});return;}
   if(k==='q'||k==='e'){its.filter(it=>ROTATABLE.has(it.type)).forEach(it=>patchItem(it.id,{rot:normRot((it.rot||0)+(k==='e'?1:-1)*(e.shiftKey?5:15))}));return;}
   if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();deleteSel();return;}
 });
