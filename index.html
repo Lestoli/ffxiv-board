@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v44</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v45</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -510,11 +510,17 @@ function updUndo(){$('undo').disabled=!undoStack.length;$('redo').disabled=!redo
 // per-shape "rotation offset": drawn spun around the arena centre, stored position untouched
 function arenaCtr(sl){const B=arenaBox(arenaOf(sl||curSlideDoc()));return[B.cx,B.cy];}
 function rotPt(x,y,deg,c){const a=deg*Math.PI/180,co=Math.cos(a),si=Math.sin(a);return[c[0]+co*(x-c[0])-si*(y-c[1]),c[1]+si*(x-c[0])+co*(y-c[1])];}
-function applyRotOffs(items,sl){let c=null;return items.map(it=>{const d=+it.rotOff||0;if(!d||it._ro)return it;c=c||arenaCtr(sl);const n={...it,_ro:1};
-  const follows=(it.target&&it.attach&&getDoc('items',it.target))||(it.anchorTo&&getDoc('items',it.anchorTo));
-  if(!follows)[n.x,n.y]=rotPt(+it.x||0,+it.y||0,d,c);
-  if(Array.isArray(it.pts)){const a=d*Math.PI/180,co=Math.cos(a),si=Math.sin(a);n.pts=it.pts.map(q=>[co*q[0]-si*q[1],si*q[0]+co*q[1]]);}
-  if(ROTATABLE.has(it.type)&&it.type!=='text')n.rot=normRot((+it.rot||0)+d);return n;});}
+// runs AFTER targeting/tracking/anchoring is worked out in saved space, then spins the result.
+// attached/anchored shapes spin with their parent; aimed & tracking shapes keep following their target and add their own offset.
+function applyRotOffs(items,sl){if(!items.some(i=>+i.rotOff))return items;const c=arenaCtr(sl),by=new Map(items.map(i=>[i.id,i]));
+  const offOf=id=>{const t=by.get(id);return t?+t.rotOff||0:0;};
+  return items.map(it=>{if(it._ro)return it;
+    if(it.type==='tether'){if(!it._a)return it;const da=offOf(it.a),db=offOf(it.b);if(!da&&!db)return it;const A=da?rotPt(it._a[0],it._a[1],da,c):it._a,B=db?rotPt(it._b[0],it._b[1],db,c):it._b;
+      return{...it,_ro:1,_a:A,_b:B,x:(A[0]+B[0])/2,y:(A[1]+B[1])/2};}
+    const pid=it.anchorTo||(it.target&&it.attach?it.target:null),d=pid&&by.get(pid)?offOf(pid):+it.rotOff||0;if(!d)return it;
+    const n={...it,_ro:1};[n.x,n.y]=rotPt(+it.x||0,+it.y||0,d,c);
+    if(Array.isArray(it.pts)){const a=d*Math.PI/180,co=Math.cos(a),si=Math.sin(a);n.pts=it.pts.map(q=>[co*q[0]-si*q[1],si*q[0]+co*q[1]]);}
+    if(ROTATABLE.has(it.type)&&it.type!=='text')n.rot=normRot((+it.rot||0)+d);return n;});}
 const rotBtns=(attr)=>`${numRow('rotOff','Rotation offset °',45,-180,180,attr)}<div class="row two"><label></label><div class="btnrow" style="margin:0;gap:4px">${[[-90,'⟲ 90°'],[-45,'⟲ 45°'],[45,'⟳ 45°'],[90,'⟳ 90°'],[0,'Reset']].map(([d,l])=>`<button data-rotall="${d}" style="padding:3px 7px">${l}</button>`).join('')}</div></div><p class="note" style="margin-top:0">Spins it around the arena's centre without moving its saved spot — e.g. ⟲ 90° makes an East spawn read as North.</p>`;
 function patchItem(id,patch){const d=getDoc('items',id);if(!d)return;edit('items',id,{...clone(d),...patch});}
 
@@ -781,7 +787,7 @@ function buildSlideSVG(sl,items,o){
   const animOn=!!(sl&&sl.anim);_animT=animOn?(o.live?playT:(o.t||0)):null;
   if(animOn&&!o.live)items=animResolve(items,o.t||0,false,slideSpeed(sl));
   let run='';const flush=()=>{if(run){s+=`<g mask="url(#${P}cl)">${run}</g>`;run='';}};
-  for(const it of resolveTargets(applyRotOffs(items,sl))){if(it.visible===false||(it.auto&&(o.thumb?!it.pinned:!autoShown(it))))continue;const g=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));
+  for(const it of (items._done?items:applyRotOffs(resolveTargets(items),sl))){if(it.visible===false||(it.auto&&(o.thumb?!it.pinned:!autoShown(it))))continue;const g=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));
     if(AOE.has(it.type)&&A.clip)run+=g;else{flush();s+=g;}}
   flush();
   return s;
@@ -797,7 +803,7 @@ function displayItems(){
   for(const p of peers){if(p.isMe&&p.sameTab)continue;const d=p.presence&&p.presence.drag;if(d&&d.s===curSlide&&d.m&&typeof d.m==='object')Object.assign(ov,d.m);}
   if(Object.keys(ov).length)items=items.map(it=>{const m=ov[it.id];if(!Array.isArray(m))return it;const n={...it,x:+m[0]||it.x,y:+m[1]||it.y};if(m.length>2&&isFinite(m[2]))n.rot=+m[2];return n;});
   if(isAnimSlide())items=animResolve(items,playT,!playing);
-  return resolveTargets(applyRotOffs(items));
+  const out=applyRotOffs(resolveTargets(items));out._done=true;return out;
 }
 
 let rq=false;function scheduleRender(){if(rq)return;rq=true;requestAnimationFrame(()=>{rq=false;renderStage();syncInsp();scheduleThumbs();});}
