@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v45</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v46</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -423,7 +423,7 @@ function rpClose(){rp=null;updPullBar();scheduleRender();}
 function renderPullBar(){const el=$('pullbar'),sl=curSlideDoc(),on=isPull(sl);el.classList.toggle('on',on);if(!on)return;
   if(el.dataset.slide!==sl.id||!el.firstChild){el.dataset.slide=sl.id;
     el.innerHTML=`<button id="rpStart" title="Back to start">⏮</button><button id="rpPlay" class="pri" title="Play / pause replay (K)">▶</button><input type="range" id="rpScrub" min="0" step="0.05"><span class="tt" id="rpTime">0:00:000</span>
-      <select id="rpSpeed" title="Replay speed"><option value="0.5">½×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="rpClose" title="Exit replay (show live)">✕</button>`;}
+      <select id="rpSpeed" title="Replay speed"><option value="0.5">½×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="rpClose" title="Exit replay (show live)">✕</button><button id="rpSave" title="Make a normal slide from everything showing right now">📌 Save as slide</button>`;$('rpSave').onclick=pullToSlide;}
   updPullBar();}
 function updPullBar(){if(!$('rpScrub'))return;const D=pullDur();const sc=$('rpScrub');sc.max=D;if(document.activeElement!==sc)sc.value=rp?rp.t:0;
   $('rpTime').textContent=rp?fmtT(rp.t*1000):'live';$('rpPlay').textContent=rp&&rp.playing?'⏸':'▶';$('rpSpeed').value=String(rp?rp.speed:(+(lsGet('ffxiv-rp-speed')||1)||1));$('rpClose').style.visibility=rp?'visible':'hidden';}
@@ -982,6 +982,23 @@ function newSlide(){
   const sl={id,title:'Slide '+(slidesManual().length+1),order:nextOrder(isPull(cur)?null:curSlide),arena:clone(arenaOf(cur))};{const g=shownGroup();if(g)sl.sgroup=g;}
   if(!edit('slides',id,sl))return;goSlide(id);
 }
+// pull → regular slide, from exactly what's on the arena right now
+function pullToSlide(){const sl=curSlideDoc();if(!sl||!isPull(sl)||!canWrite)return;
+  const vis=displayItems().filter(i=>i.visible!==false&&!i._dangling&&(!i.auto||autoShown(i)));
+  if(!vis.length){toast('Nothing is showing — turn some shapes on first');return;}
+  const T=rp?rp.t:pullViewT,id=uid(),map=new Map(vis.map(i=>[i.id,uid()]));
+  const ns={id,title:`${sl.title||'Pull'} @ ${fmtT(T*1000).replace(/:\d{3}$/,'')}`,order:nextOrder(null),arena:clone(arenaAt(sl,T))};{const g=shownGroup();if(g)ns.sgroup=g;}
+  beginGesture();if(!edit('slides',id,ns)){endGesture();return;}let n=0;
+  for(const it of vis){const d=clone(it);
+    for(const k of Object.keys(d))if(k[0]==='_')delete d[k];
+    ['auto','pinned','at','keys','start','end','tele','hit','dur','rotOff'].forEach(k=>delete d[k]);
+    if(d.ev&&d.ev.action&&!d.label)d.name=d.name||d.ev.action;
+    d.id=map.get(it.id);d.slide=id;
+    if(d.type==='tether'){if(!map.has(d.a)||!map.has(d.b))continue;d.a=map.get(d.a);d.b=map.get(d.b);}
+    for(const k of['target','anchorTo'])if(d[k]){if(map.has(d[k]))d[k]=map.get(d[k]);else{delete d[k];if(k==='target'){delete d.attach;delete d.track;}}}
+    d.x=r2(+d.x||0);d.y=r2(+d.y||0);if(d.rot!==undefined)d.rot=normRot(+d.rot||0);if(d.length!==undefined)d.length=r2(+d.length);
+    edit('items',d.id,d);n++;}
+  endGesture();rp=null;goSlide(id);toast(`New slide with ${n} item${n===1?'':'s'} — edit away`);}
 function dupSlide(sid,asPaste){
   const src=asPaste||{slide:getDoc('slides',sid),items:slideItems(sid)};if(!src.slide)return;
   const id=uid();
@@ -1262,6 +1279,7 @@ function buildInsp(){
         :(A.img?'<p class="note">Loading picture…</p>':'<p class="note">Put a screenshot or photo of the real arena floor under the diagram. Then line it up with “Align by 2 points”, or with the sliders.</p>')}
       <div class="btnrow"><button ${A.img?'':'class="pri" '}data-act="bgImport">${A.img?'Replace picture…':'Import picture…'}</button>${A.img?'<button class="pri" data-act="bgAlign">Align by 2 points</button><button data-act="bgFit">Fit to arena</button><button data-act="bgAll">'+(isPull(sl)?'Use on all pulls of this fight':'Use on all slides in this group')+'</button><button data-act="bgRemove">Remove</button>':''}</div>
       <div class="btnrow"><button data-act="copyArena">Copy arena</button>${readClip('arena')?'<button data-act="pasteArena">Paste arena</button>':''}</div>
+      ${isPull(sl)&&canWrite?`<div class="btnrow"><button class="pri" data-act="pullToSlide" title="Copies what's on the arena right now (the shapes you turned on + anything flashing) into a normal slide you can edit">📌 Save visible as new slide</button></div>`:''}
       ${isPull(sl)&&sl.fight&&getDoc('fights',sl.fight)?`<div class="btnrow"><button class="pri" data-act="fightArena">Use for new pulls of ${esc(getDoc('fights',sl.fight).name)}</button><button data-act="fightArenaAll">Apply to all its pulls</button></div>`:''}</div>
       <div class="sect"><h2>Guides</h2><div class="chks">${chk('grid','Grid','data-a')}${chk('rings','5y rings','data-a')}${chk('spokes','8-way spokes','data-a')}${chk('cardinals','N/E/S/W','data-a')}${chk('clip','Clip AoEs to arena','data-a')}</div>
       ${numRow('gridStep','Grid step (y)',.5,.5,10,'data-a')}</div>
@@ -1452,6 +1470,7 @@ function action(a){
         toast(`Picture applied to ${n} other ${isPull(sl)?'pull':'slide'}${n===1?'':'s'}`);}return;
     case'copyArena':if(sl){writeClip('arena',clone(editArena(sl)));toast('Arena copied — open another slide and press Paste arena');buildInsp();}return;
     case'pasteArena':{const ar=readClip('arena');if(sl&&ar){setEditArena(sl,ar);fitView();setTimeout(buildInsp);toast('Arena pasted');}return;}
+    case'pullToSlide':pullToSlide();return;
     case'fightArena':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl)),arenaPhases:clone(sl.arenaPhases||[])});toast(`New pulls in ${f.name} will use this arena`);}return;}
     case'fightArenaAll':{const f=sl&&getDoc('fights',sl.fight);if(f){edit('fights',f.id,{...clone(f),arena:clone(arenaOf(sl)),arenaPhases:clone(sl.arenaPhases||[])});setTimeout(()=>applyFightArena(f.id),50);}return;}
     case'resetArena':if(sl)setEditArena(sl,{...editArena(sl),bg:DEFAULT_ARENA.bg,floor:DEFAULT_ARENA.floor,floor2:DEFAULT_ARENA.floor2,edge:DEFAULT_ARENA.edge});return;
