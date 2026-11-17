@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v46</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v47</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -1163,16 +1163,30 @@ function newFightBox(){
 }
 function fightMenu(fid,rect){
   closeMenu();const f=getDoc('fights',fid);if(!f)return;const cur=curSlideDoc();const m=document.createElement('div');m.className='menu';m.id='menu';
-  m.innerHTML=`<button data-m="rename">Rename fight</button>${cur?'<button data-m="arena">Use current slide’s arena for new pulls</button>':''}${f.arena?'<button data-m="applyall">Apply fight arena to all its pulls</button>':''}<button data-m="rec">Record new pulls here</button><hr><button data-m="del" style="color:#ffb3bb">Delete fight & its pulls</button>`;
+  m.innerHTML=`<button data-m="rename">Rename fight</button><button data-m="center">Arena center…</button>${cur?'<button data-m="arena">Use current slide’s arena for new pulls</button>':''}${f.arena?'<button data-m="applyall">Apply fight arena to all its pulls</button>':''}<button data-m="rec">Record new pulls here</button><hr><button data-m="del" style="color:#ffb3bb">Delete fight & its pulls</button>`;
   document.body.appendChild(m);const x=Math.min(rect.right+4,innerWidth-250),y=Math.min(rect.bottom,innerHeight-m.offsetHeight-8);m.style.left=x+'px';m.style.top=y+'px';
   m.onclick=e=>{const a=e.target.closest('[data-m]');if(!a)return;closeMenu();
     ({rename:()=>{openModal(`<h2>Rename fight</h2><div class="row two"><label>Name</label><input type="text" id="frIn" maxlength="40" value="${esc(f.name||'')}"></div><div class="btnrow"><button class="pri" id="frOk">Save</button><button data-close>Cancel</button></div>`);
         const ok=()=>{const v=$('frIn').value.trim().slice(0,40);if(v){edit('fights',fid,{...clone(getDoc('fights',fid)),name:v});closeModal();}};$('frOk').onclick=ok;$('frIn').onkeydown=e=>{if(e.key==='Enter')ok();};setTimeout(()=>$('frIn').focus(),30);},
       arena:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),arena:clone(arenaOf(cur)),arenaPhases:clone(cur.arenaPhases||[])});toast(`New pulls in ${f.name} will use this arena`);},
+      center:()=>fightCenterBox(fid),
       applyall:()=>applyFightArena(fid),
       rec:()=>{edit('fights',fid,{...clone(getDoc('fights',fid)),activeAt:Date.now()});toast(`New pulls will go into ${f.name}`);},
       del:()=>confirmBox(`Delete “${esc(f.name)}” and its ${pullsOf(fid).length} pulls for everyone? You can undo with Ctrl+Z.`,'Delete fight',()=>{pullsOf(fid).forEach(sl=>{edit('slides',sl.id,null);allSlideItems(sl.id).forEach(it=>edit('items',it.id,null));});edit('fights',fid,null);viewFight=null;if(!getDoc('slides',curSlide)||isPull(curSlideDoc())&&(curSlideDoc().fight||'')===fid){const m2=slidesManual();curSlide=null;if(m2[0])goSlide(m2[0].id);else renderAll();}renderSlides();})})[a.dataset.m]();};
 }
+// a fight's arena centre: stored on the fight (the relay copies fight.arena into every new pull)
+function setFightCenter(fid,cx,cy,moveExisting){const f=getDoc('fights',fid);if(!f)return;const pl=pullsOf(fid);
+  const baseA=f.arena?clone(f.arena):clone(arenaOf(pl[0]||null));const fix=A=>({...A,cx,cy});
+  beginGesture();edit('fights',fid,{...clone(f),arena:fix(baseA),arenaPhases:(f.arenaPhases||[]).map(p=>({...p,arena:fix(p.arena||{})}))});
+  if(moveExisting)pl.forEach(sl=>edit('slides',sl.id,{...clone(sl),arena:fix(sl.arena||{}),arenaPhases:Array.isArray(sl.arenaPhases)?sl.arenaPhases.map(p=>({...p,arena:fix(p.arena||{})})):sl.arenaPhases}));
+  endGesture();scheduleRender();if(moveExisting)setTimeout(buildInsp);}
+function fightCenterBox(fid){const f=getDoc('fights',fid);if(!f)return;const pl=pullsOf(fid),A=f.arena||arenaOf(pl[0]||null);
+  openModal(`<h2>Arena center — ${esc(f.name||'Fight')}</h2><p class="note">Game coordinates of the middle of this fight’s arena. New pulls recorded into this fight use it.</p>
+    <div class="row two"><label>Center X</label><input type="number" step="0.5" id="fcX" value="${A.cx??100}"></div><div class="row two"><label>Center Y</label><input type="number" step="0.5" id="fcY" value="${A.cy??100}"></div>
+    ${pl.length?`<div class="chks"><label class="chk"><input type="checkbox" id="fcAll" checked>Also move the ${pl.length} existing pull${pl.length===1?'':'s'}</label></div>`:''}
+    <div class="btnrow"><button class="pri" id="fcOk">Save</button><button data-close>Cancel</button></div>`);
+  const ok=()=>{const x=lim('cx',+$('fcX').value),y=lim('cy',+$('fcY').value);if(!isFinite(x)||!isFinite(y))return;setFightCenter(fid,x,y,!!($('fcAll')&&$('fcAll').checked));closeModal();toast(`${f.name}: arena center ${x}, ${y}`);};
+  $('fcOk').onclick=ok;['fcX','fcY'].forEach(i=>$(i).onkeydown=e=>{if(e.key==='Enter')ok();});setTimeout(()=>$('fcX').select(),30);}
 function applyFightArena(fid){const f=getDoc('fights',fid);if(!f||!f.arena)return;pullsOf(fid).forEach(sl=>edit('slides',sl.id,{...clone(sl),arena:clone(f.arena),arenaPhases:clone(f.arenaPhases||[])}));toast(`Arena applied to ${pullsOf(fid).length} pulls`);}
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('#menu')&&!e.target.closest('[data-more]'))closeMenu();});
 
@@ -1401,7 +1415,10 @@ insp.addEventListener('input',e=>{
     if(el.dataset.roster){if(v)r.map[el.dataset.roster]=v;else delete r.map[el.dataset.roster];}else r.showJobs=!!v;edit('meta','roster',r);scheduleThumbs();return;}
   const sl=curSlideDoc();if(!sl)return;
   if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:el.dataset.st==='sgroup'?(v||null):v});if(el.dataset.st==='sgroup'){setViewGroup(v||'');renderSlides();}scheduleThumbs();return;}
-  if(el.dataset.a){setEditArena(sl,{...editArena(sl),[el.dataset.a]:v});syncInsp(el);return;}
+  if(el.dataset.a){setEditArena(sl,{...editArena(sl),[el.dataset.a]:v});
+    if((el.dataset.a==='cx'||el.dataset.a==='cy')&&isPull(sl)&&sl.fight&&getDoc('fights',sl.fight)){const f=getDoc('fights',sl.fight),A=arenaOf(getDoc('slides',sl.id)||sl);
+      setFightCenter(f.id,A.cx,A.cy,false);clearTimeout(window._fcT);window._fcT=setTimeout(()=>toast(`New pulls in ${f.name} will be centered at ${A.cx}, ${A.cy}`),600);}
+    syncInsp(el);return;}
   if(el.dataset.phfrom!==undefined)return;
   if(el.dataset.ap){const[i,k]=el.dataset.ap.split(':');const ar=editArena(sl),parts=clone(ar.parts||[]);if(!parts[+i])return;parts[+i][k]=v;setEditArena(sl,{...ar,parts});syncInsp(el);return;}
   if(el.dataset.kf||el.dataset.db){const s=selItems()[0];if(!s)return;
