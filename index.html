@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v48</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v49</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -512,6 +512,9 @@ function arenaCtr(sl){const B=arenaBox(arenaOf(sl||curSlideDoc()));return[B.cx,B
 function rotPt(x,y,deg,c){const a=deg*Math.PI/180,co=Math.cos(a),si=Math.sin(a);return[c[0]+co*(x-c[0])-si*(y-c[1]),c[1]+si*(x-c[0])+co*(y-c[1])];}
 // runs AFTER targeting/tracking/anchoring is worked out in saved space, then spins the result.
 // attached/anchored shapes spin with their parent; aimed & tracking shapes keep following their target and add their own offset.
+function applyFace(items,sl){if(!items.some(i=>i.faceMode))return items;const c=arenaCtr(sl);
+  return items.map(it=>{if(!it.faceMode||!ROTATABLE.has(it.type))return it;const dx=c[0]-it.x,dy=c[1]-it.y;if(Math.hypot(dx,dy)<1e-6)return it;
+    return{...it,rot:normRot(Math.atan2(dx,-dy)*180/Math.PI+(it.faceMode==='out'?180:0))};});}
 function applyRotOffs(items,sl){if(!items.some(i=>+i.rotOff))return items;const c=arenaCtr(sl),by=new Map(items.map(i=>[i.id,i]));
   const offOf=id=>{const t=by.get(id);return t?+t.rotOff||0:0;};
   return items.map(it=>{if(it._ro)return it;
@@ -522,7 +525,7 @@ function applyRotOffs(items,sl){if(!items.some(i=>+i.rotOff))return items;const 
     if(Array.isArray(it.pts)){const a=d*Math.PI/180,co=Math.cos(a),si=Math.sin(a);n.pts=it.pts.map(q=>[co*q[0]-si*q[1],si*q[0]+co*q[1]]);}
     if(ROTATABLE.has(it.type)&&it.type!=='text')n.rot=normRot((+it.rot||0)+d);return n;});}
 const rotBtns=(attr)=>`${numRow('rotOff','Rotation offset °',45,-180,180,attr)}<div class="row two"><label></label><div class="btnrow" style="margin:0;gap:4px">${[[-90,'⟲ 90°'],[-45,'⟲ 45°'],[45,'⟳ 45°'],[90,'⟳ 90°'],[0,'Reset']].map(([d,l])=>`<button data-rotall="${d}" style="padding:3px 7px">${l}</button>`).join('')}</div></div><p class="note" style="margin-top:0">Spins it around the arena's centre without moving its saved spot — e.g. ⟲ 90° makes an East spawn read as North.</p>`;
-function patchItem(id,patch){const d=getDoc('items',id);if(!d)return;edit('items',id,{...clone(d),...patch});}
+function patchItem(id,patch){const d=getDoc('items',id);if(!d)return;if('rot' in patch&&!('faceMode' in patch)&&d.faceMode)patch={...patch,faceMode:null};edit('items',id,{...clone(d),...patch});}
 
 // ================= view state =================
 let curSlide=null, selIds=[], tool='select', view={x:100,y:100,h:24}, spaceDown=false;
@@ -807,7 +810,7 @@ function buildSlideSVG(sl,items,o){
   const animOn=!!(sl&&sl.anim);_animT=animOn?(o.live?playT:(o.t||0)):null;
   if(animOn&&!o.live)items=animResolve(items,o.t||0,false,slideSpeed(sl));
   let run='';const flush=()=>{if(run){s+=`<g mask="url(#${P}cl)">${run}</g>`;run='';}};
-  for(const it of (items._done?items:applyRotOffs(resolveTargets(items),sl))){if(it.visible===false||(it.auto&&(o.thumb?!it.pinned:!autoShown(it))))continue;const g=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));
+  for(const it of (items._done?items:applyFace(applyRotOffs(resolveTargets(items),sl),sl))){if(it.visible===false||(it.auto&&(o.thumb?!it.pinned:!autoShown(it))))continue;const g=itemSVG(it,A,o.live,o.sel&&o.sel.has(it.id));
     if(AOE.has(it.type)&&A.clip)run+=g;else{flush();s+=g;}}
   flush();
   return s;
@@ -823,7 +826,7 @@ function displayItems(){
   for(const p of peers){if(p.isMe&&p.sameTab)continue;const d=p.presence&&p.presence.drag;if(d&&d.s===curSlide&&d.m&&typeof d.m==='object')Object.assign(ov,d.m);}
   if(Object.keys(ov).length)items=items.map(it=>{const m=ov[it.id];if(!Array.isArray(m))return it;const n={...it,x:+m[0]||it.x,y:+m[1]||it.y};if(m.length>2&&isFinite(m[2]))n.rot=+m[2];return n;});
   if(isAnimSlide())items=animResolve(items,playT,!playing);
-  const out=applyRotOffs(resolveTargets(items));out._done=true;return out;
+  const out=applyFace(applyRotOffs(resolveTargets(items)));out._done=true;return out;
 }
 
 let rq=false;function scheduleRender(){if(rq)return;rq=true;requestAnimationFrame(()=>{rq=false;renderStage();syncInsp();scheduleThumbs();});}
@@ -1256,7 +1259,10 @@ function reorder(dir){
   const its=slideItems(curSlide);const s=selItems()[0];if(!s)return;const i=its.findIndex(x=>x.id===s.id),j=dir==='top'?its.length-1:dir==='bottom'?0:i+dir;
   if(j<0||j>=its.length||j===i)return;its.splice(i,1);its.splice(j,0,s);its.forEach((it,n)=>{if((it.z||0)!==n+1)edit('items',it.id,{...clone(it),z:n+1});});
 }
-function faceToward(s,out){const A=arenaOf(curSlideDoc()),dx=A.cx-s.x,dy=A.cy-s.y;if(Math.hypot(dx,dy)<1e-9)return;patchItem(s.id,{rot:normRot(Math.atan2(dx,-dy)*180/Math.PI+(out?180:0))});}
+function faceToward(s,out){const follows=(s.anchorTo&&getDoc('items',s.anchorTo))||(s.target&&s.attach&&getDoc('items',s.target));
+  if(follows){patchItem(s.id,{faceMode:s.faceMode===(out?'out':'in')?null:(out?'out':'in')});return;}
+  const d=displayItems().find(i=>i.id===s.id)||s,c=arenaCtr(),dx=c[0]-d.x,dy=c[1]-d.y;if(Math.hypot(dx,dy)<1e-9)return;
+  patchItem(s.id,{rot:normRot(Math.atan2(dx,-dy)*180/Math.PI+(out?180:0)-(+s.rotOff||0)),faceMode:null});}
 
 // ================= inspector =================
 function numRow(k,l,step,min,max,attr='data-k'){const L=LIMITS[String(k).split(':').pop()];return `<div class="row"><label>${l}</label><input type="range" ${attr}="${k}" step="${step}" min="${min}" max="${max}"><input type="number" ${attr}="${k}" step="${step}"${L?` min="${L[0]}" max="${L[1]}"`:''}></div>`;}
@@ -1275,7 +1281,7 @@ function arenaKey(){const sl=curSlideDoc();if(!sl)return'';const A=editArena(sl)
 function buildInsp(){
   const insp=$('insp'),sl=curSlideDoc(),sp=$('slidePane'),ip=$('itemPane');
   const prevSel=buildInsp._sel,spTop=sp.scrollTop,ipTop=ip.scrollTop;buildInsp._sel=selIds.join(',');
-  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+(its[0].ownStats?'S':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();inspKey=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+(its[0].ownStats?'S':'')+'o'+(its[0].anchorTo||'')+'f'+(its[0].faceMode||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(!sl){sp.innerHTML='<p class="note">No slide selected.</p>';ip.innerHTML='';insp.classList.remove('item');return;}
   const A=editArena(sl),span=A.radius+A.margin+10,dis=canWrite?'':' disabled';
   {
@@ -1351,7 +1357,7 @@ function buildInsp(){
     const aoe=AOE.has(s.type),hasColor=!['marker','waymark'].includes(s.type);
     ip.innerHTML=closeBtn+`<fieldset style="border:0;padding:0;margin:0"${dis}><h2 style="padding-right:30px">${TYPE_LABEL[s.type]}</h2>${txtRow('name','Name')}
       ${!['ink','tether'].includes(s.type)?numRow('x','X',.1,r2(A.cx-span),r2(A.cx+span))+numRow('y','Y',.1,r2(A.cy-span),r2(A.cy+span))+numRow('pd','Dist. from ctr',.1,0,A.radius+A.margin)+numRow('pa','Angle from ctr °',1,0,360):''}
-      ${!['ink','tether'].includes(s.type)?`<div class="btnrow" style="margin-top:2px"><button data-act="center">Move to center</button>${ROTATABLE.has(s.type)&&!aimed?'<button data-act="faceIn">Face center</button><button data-act="faceOut">Face outward</button>':''}</div>`:''}
+      ${!['ink','tether'].includes(s.type)?`<div class="btnrow" style="margin-top:2px"><button data-act="center">Move to center</button>${ROTATABLE.has(s.type)&&!aimed?`<button data-act="faceIn"${s.faceMode==='in'?' class="pri"':''}>Face center</button><button data-act="faceOut"${s.faceMode==='out'?' class="pri"':''}>Face outward</button>`+(s.faceMode?`<p class="note" style="margin:4px 0 0;width:100%">Keeps facing ${s.faceMode==='in'?'the center':'outward'} as it moves — click again or rotate it to stop.</p>`:''):''}</div>`:''}
       ${s.auto&&s.ev?(()=>{const e=s.ev,t0=pullT0(slideItems(curSlide));const row=(k,v)=>v!==undefined&&v!==''&&v!==null?`<b>${k}</b><span>${esc(v)}</span>`:'';
         return `<div class="sect"><h2>From the game</h2><div class="evinfo">${row('Attack',e.action)}${row('Action ID',e.actionId)}${row('Event',e.type)}${row('Time',fmtT((s.at||t0)-t0))}${row('Source',e.src)}${row('Target',e.tgt)}${row('Cast time',e.castTime?e.castTime+'s':'')}${row('Shape code',e.shape)}${row('Size',e.len!==undefined?e.len+(e.wid?' × '+e.wid:'')+'y':'')}${(()=>{const h=hitsOf(e),r=rankOf(e);return (h.length?`<b>Main target</b><span>${esc(h[0].name)} (${esc(h[0].job)})</span>`:'')+(r?`<b>Distance rank</b><span>${distBadge(s,true)||'#'+esc(r)}</span>`:'')+
           (h.length>1?`<b>Also hit</b><span>${h.slice(1).map(x=>`${esc(x.name)} (${esc(x.job)}) #${x.rank}`).join('<br>')}</span>`:'');})()}</div>
@@ -1388,7 +1394,7 @@ function buildInsp(){
 }
 function syncInsp(except,force){
   const insp=$('insp');
-  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+(its[0].ownStats?'S':'')+'o'+(its[0].anchorTo||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
+  const its=selItems();const key=arenaKey()+curSlide+'|'+selIds.join(',')+'|'+(its[0]?its[0].type:'')+'|'+canWrite+'|'+(its.length===1?slideItems(curSlide).length+(its[0].target||'')+(its[0].attach?1:0)+(its[0].track?'t':'')+(its[0].ownStats?'S':'')+'o'+(its[0].anchorTo||'')+'f'+(its[0].faceMode||'')+'h'+(its[0].head||'')+'k'+(its[0].keys||[]).length+'d'+(its[0].debuffs||[]).length+'/'+(its[0].debuffs||[]).map(d=>+d.dur>0?1:0).join(''):its.length?'':'n'+slideItems(curSlide).length+'|'+slideItems(curSlide).filter(i=>i.pinned).length);
   if(key!==inspKey&&!force){buildInsp();return;}
   const s=its.length===1?its[0]:null,sl=curSlideDoc(),A=editArena(sl),act=document.activeElement;
   insp.querySelectorAll('ul.layers [data-lsel]').forEach(li=>li.classList.toggle('on',selIds.includes(li.dataset.lsel)));
@@ -1539,7 +1545,7 @@ function action(a){
   if(!s)return;
   switch(a){
     case'center':{const A=arenaOf(sl);patchItem(s.id,{x:A.cx,y:A.cy});break;}
-    case'faceIn':faceToward(s,false);break;case'faceOut':faceToward(s,true);break;
+    case'faceIn':faceToward(s,false);setTimeout(buildInsp);break;case'faceOut':faceToward(s,true);setTimeout(buildInsp);break;
     case'up':reorder(1);break;case'down':reorder(-1);break;case'top':reorder('top');break;case'bottom':reorder('bottom');break;
   }
 }
