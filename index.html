@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v47</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v48</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -318,7 +318,7 @@ const FIELDS={
   ink:[N('width','Thickness',.05,.05,3)],
 };
 const TYPE_LABEL={circle:'Circle',donut:'Donut',rect:'Rectangle / Line',cone:'Cone',cross:'Cross',star:'Star (8-way)',tether:'Tether',arrow:'Arrow',tower:'Tower',boss:'Boss',marker:'Player',waymark:'Waymark',text:'Text',ink:'Pen stroke'};
-const DEFAULT_ARENA={imgClip:true,imgOp:1,shape:'circle',radius:20,cx:100,cy:100,margin:4,bg:'#070d1f',floor:'#1a2b5c',floor2:'#0d1838',edge:'#5fd3ff',
+const DEFAULT_ARENA={imgClip:true,imgOp:1,edgeStyle:'plain',decoCol:'#e6ebf5',notches:8,shape:'circle',radius:20,cx:100,cy:100,margin:4,bg:'#070d1f',floor:'#1a2b5c',floor2:'#0d1838',edge:'#5fd3ff',
   grid:true,gridStep:1,rings:true,spokes:true,cardinals:true,clip:true,snap:0.5,showTitle:true};
 const ICON={
   select:'<path d="M5 3l12 8-5.5 1.2L14 18l-2.3 1-2.6-5.7L5 17z" fill="currentColor"/>',
@@ -446,7 +446,7 @@ function curSlideDoc(){return curSlide?getDoc('slides',curSlide):null;}
 const COORD_MIN=-200,COORD_MAX=400;
 const LIMITS={x:[COORD_MIN,COORD_MAX],y:[COORD_MIN,COORD_MAX],cx:[COORD_MIN,COORD_MAX],cy:[COORD_MIN,COORD_MAX],
   radius:[0,150],r:[0,150],w:[0,200],h:[0,200],width:[0,200],length:[0,200],inner:[0,150],outer:[0,150],
-  trackExtra:[-50,50],minD:[0,300],maxD:[0,300],moveSpeed:[0,30],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],imgX:[COORD_MIN,COORD_MAX],imgY:[COORD_MIN,COORD_MAX],imgW:[1,400],imgRot:[-360,360],rotOff:[-360,360],imgOp:[0,1],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
+  trackExtra:[-50,50],minD:[0,300],maxD:[0,300],moveSpeed:[0,30],start:[0,900],headStart:[0,900],headEnd:[0,900],end:[0,900],tele:[0,60],hit:[0,30],dur:[0,900],animLen:[1,900],t:[0,900],imgX:[COORD_MIN,COORD_MAX],imgY:[COORD_MIN,COORD_MAX],imgW:[1,400],imgRot:[-360,360],rotOff:[-360,360],notches:[0,30],imgOp:[0,1],margin:[1,30],gridStep:[0.5,20],snap:[0,10],size:[0.1,20],labelSize:[0.1,20],distSize:[0.1,10],pd:[0,300]};
 function lim(k,v){const L=LIMITS[k];return L&&typeof v==='number'?clamp(v,L[0],L[1]):v;}
 function arenaOf(sl){const A={...DEFAULT_ARENA,...((sl&&sl.arena)||{})};
   for(const k of['cx','cy','margin','gridStep','snap','w','h'])if(typeof A[k]==='number')A[k]=lim(k,A[k]);
@@ -757,6 +757,25 @@ function itemSVG(s,A,live,isSel){
   const g=`<g${attrs} transform="translate(${s.x} ${s.y})"${s._ghost?' opacity=".35"':''}><g transform="rotate(${rot})">${shapeBody(s,live)}</g>${label}${s.type==='marker'&&!s._ghost?overheadSVG(s):''}</g>`;
   return g;
 }
+// Ultimate-style edge: chain ring, shurikens on the 8 directions, small notches between them
+function edgeDecoSVG(A){if(A.edgeStyle!=='ultimate'||!['circle','square','rect'].includes(A.shape))return'';
+  const cx=A.cx,cy=A.cy,c=A.decoCol||'#e6ebf5',R=+A.radius||20,hw=A.shape==='rect'?(+A.w||40)/2:R,hh=A.shape==='rect'?(+A.h||30)/2:R;
+  const at=th=>{const dx=Math.sin(th),dy=-Math.cos(th);if(A.shape==='circle')return[cx+R*dx,cy+R*dy];const t=Math.min(Math.abs(dx)>1e-9?hw/Math.abs(dx):1e9,Math.abs(dy)>1e-9?hh/Math.abs(dy):1e9);return[cx+t*dx,cy+t*dy];};
+  const f=v=>Math.round(v*1000)/1000;
+  const ring=A.shape==='circle'?`<circle cx="${cx}" cy="${cy}" r="${R}"`:`<rect x="${cx-hw}" y="${cy-hh}" width="${2*hw}" height="${2*hh}"`;
+  let o=`<g pointer-events="none">${ring} fill="none" stroke="#000" stroke-opacity=".45" stroke-width=".5"/>${ring} fill="none" stroke="${c}" stroke-width=".14"/>${ring} fill="none" stroke="${c}" stroke-width=".34" stroke-dasharray=".55 .3" stroke-opacity=".8"/>`;
+  const n=Math.max(0,Math.round(+A.notches||0)),circ=A.shape==='circle';
+  // 8 anchor spots: N, NE, E, SE, S, SW, W, NW (corners and side midpoints on square/rect arenas)
+  const pts=circ?[...Array(8)].map((_,i)=>at(i*Math.PI/4)):[[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]].map(([u,v])=>[cx+u*hw,cy+v*hh]);
+  const notch=(x,y,ang)=>`<path transform="translate(${f(x)} ${f(y)}) rotate(${f(ang)})" d="M-.24 .05 L0 -.62 L.24 .05 Z" fill="${c}" stroke="#000" stroke-opacity=".5" stroke-width=".06"/>`;
+  for(let i=0;i<8;i++)for(let j=1;j<=n;j++){
+    if(circ){const th=(i+j/(n+1))*Math.PI/4,[x,y]=at(th);o+=notch(x,y,Math.atan2(cx-x,-(cy-y))*180/Math.PI);}
+    else{const [ax,ay]=pts[i],[bx,by]=pts[(i+1)%8],t=j/(n+1),x=ax+(bx-ax)*t,y=ay+(by-ay)*t;
+      const nx=Math.abs(bx-ax)>1e-9?0:(cx-x),ny=Math.abs(bx-ax)>1e-9?(cy-y):0;o+=notch(x,y,Math.atan2(nx,-ny)*180/Math.PI);}}
+  const star='M0 -1 L.22 -.22 L1 0 L.22 .22 L0 1 L-.22 .22 L-1 0 L-.22 -.22 Z';
+  for(let i=0;i<8;i++){const [x,y]=pts[i],ang=Math.atan2(cx-x,-(cy-y))*180/Math.PI;
+    o+=`<g transform="translate(${f(x)} ${f(y)}) rotate(${f(ang)}) scale(1.35)"><path d="${star}" fill="${c}" stroke="#000" stroke-opacity=".55" stroke-width=".08"/><path d="M0 -1 L.22 -.22 L0 0 Z M1 0 L.22 .22 L0 0 Z M0 1 L-.22 .22 L0 0 Z M-1 0 L-.22 -.22 L0 0 Z" fill="#000" fill-opacity=".22"/><circle r=".16" fill="#000" fill-opacity=".45"/></g>`;}
+  return o+'</g>';}
 function buildSlideSVG(sl,items,o){
   if(!o.live)items=items.map(withStats);
   const A=arenaAt(sl,o.live?viewT():(o.t||0));A._pre=o.pre;const P=o.pre,cx=A.cx,cy=A.cy,B=arenaBox(A),R=Math.max(B.in,1);
@@ -780,6 +799,7 @@ function buildSlideSVG(sl,items,o){
   if(A.rings)for(let r=5;r<Math.min(200,(A.shape==='circle'&&!parts.some(p=>p!==parts[0])?R:B.h*2))-.01;r+=5)g+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#bfe6ff" stroke-opacity=".14" stroke-width="0.07" stroke-dasharray="0.6 0.4"/>`;
   g+=`<circle cx="${cx}" cy="${cy}" r="0.25" fill="#bfe6ff" fill-opacity=".5"/>`;
   s+=`<g mask="url(#${P}cl)">${g}</g>`;
+  s+=edgeDecoSVG(A);
   if(A.cardinals){const d=B.in+A.margin*.5,fs=Math.min(1.8,A.margin*.55);
     [['N',0,-1],['E',1,0],['S',0,1],['W',-1,0]].forEach(([t,x,y])=>{s+=`<text x="${B.cx+x*d}" y="${B.cy+y*d}" font-size="${fs}" font-family="${FONT}" font-weight="700" fill="${A.edge}" fill-opacity=".85" text-anchor="middle" dominant-baseline="central">${t}</text>`;});}
   if(A.showTitle&&sl&&sl.title&&!o.thumb)s+=`<text x="${bx0+.8}" y="${by0+.8}" font-size="${Math.min(1.2,A.margin*.32)}" font-family="${FONT}" font-weight="700" fill="#fff" dominant-baseline="hanging">${esc(sl.title)}</text>`;
@@ -1280,6 +1300,7 @@ function buildInsp(){
           <p class="note" style="margin:4px 0 0">The settings below edit the arena ticked here. ${timed?'The arena switches at each time during '+(sl.anim?'playback':'replays and live pulls')+'.':'On pull or animated slides the arena switches at these times.'}</p></div>`;})()}
       ${selRow('shape','Shape',[['circle','Circle'],['square','Square'],['rect','Rectangle'],['none','None — pieces only']],'data-a')}
       ${A.shape==='rect'?numRow('w','Width (y)',.5,2,100,'data-a')+numRow('h','Height (y)',.5,2,100,'data-a'):A.shape==='none'?'':numRow('radius',A.shape==='square'?'Half-width (y)':'Radius (y)',.5,5,50,'data-a')}${numRow('cx','Center X',.5,0,200,'data-a')}${numRow('cy','Center Y',.5,0,200,'data-a')}
+      ${['circle','square','rect'].includes(A.shape)?selRow('edgeStyle','Edge style',[['plain','Plain'],['ultimate','Ultimate (chain + shurikens)']],'data-a')+colRow('decoCol','Chain color','data-a')+numRow('notches','Notches between',1,0,30,'data-a'):''}
       ${numRow('margin','Margin (y)',.5,1,15,'data-a')}${numRow('snap','Snap (y)',.25,0,5,'data-a')}
       <p class="note">Game coordinates: center (100, 100), +X east, +Y south. 0° = North, clockwise. Snap 0 = free.</p>
       <h2 style="margin-top:12px">Extra pieces</h2><p class="note">Add circles or rectangles to build any arena shape. Tick “Hole” to cut a piece out (pits, gaps).</p>
@@ -1416,6 +1437,7 @@ insp.addEventListener('input',e=>{
   const sl=curSlideDoc();if(!sl)return;
   if(el.dataset.st){edit('slides',sl.id,{...clone(sl),[el.dataset.st]:el.dataset.st==='sgroup'?(v||null):v});if(el.dataset.st==='sgroup'){setViewGroup(v||'');renderSlides();}scheduleThumbs();return;}
   if(el.dataset.a){setEditArena(sl,{...editArena(sl),[el.dataset.a]:v});
+    if(el.dataset.a==='edgeStyle')setTimeout(buildInsp);
     if((el.dataset.a==='cx'||el.dataset.a==='cy')&&isPull(sl)&&sl.fight&&getDoc('fights',sl.fight)){const f=getDoc('fights',sl.fight),A=arenaOf(getDoc('slides',sl.id)||sl);
       setFightCenter(f.id,A.cx,A.cy,false);clearTimeout(window._fcT);window._fcT=setTimeout(()=>toast(`New pulls in ${f.name} will be centered at ${A.cx}, ${A.cy}`),600);}
     syncInsp(el);return;}
