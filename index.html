@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v49</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v50</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -291,7 +291,7 @@ const DEF={
   tower:{name:'Tower',radius:3,count:1,color:'#b46bff',opacity:.4},
   boss:{name:'Boss',radius:5,rot:180,color:'#ff3b3b',opacity:.2},
   marker:{name:'Player',role:'tank',text:'MT',size:1,color:'#ffffff',opacity:1},
-  waymark:{name:'Waymark A',mark:'A',size:1.5,color:'#ffffff',opacity:1},
+  waymark:{name:'Waymark A',mark:'A',size:1,color:'#ffffff',opacity:1},
   text:{name:'Text',text:'Text',size:2,rot:0,color:'#ffffff',opacity:1,boxed:false},
   ink:{name:'Pen stroke',width:.35,color:'#ffd43b',opacity:1},
 };
@@ -313,7 +313,7 @@ const FIELDS={
   tower:[N('radius','Radius',.5,0,20),N('count','Soak count',1,0,8)],
   boss:[N('radius','Hitbox radius',.5,0,30),N('rot','Facing °',1,-180,180)],
   marker:[S('role','Role',[['tank','Tank'],['healer','Healer'],['support','Support (tank or healer)'],['dps','DPS'],['other','Other']]),T('text','Label'),N('size','Size',.1,.3,4)],
-  waymark:[S('mark','Mark',['A','B','C','D','1','2','3','4'].map(m=>[m,m])),N('size','Size',.1,.3,5)],
+  waymark:[S('mark','Mark',['A','B','C','D','1','2','3','4'].map(m=>[m,m])),N('size','Half-width (y) — 1 = 2y across',.1,.3,5)],
   text:[TA('text','Text'),N('size','Font size',.1,.3,10),ROT,C('boxed','Dark box behind text')],
   ink:[N('width','Thickness',.05,.05,3)],
 };
@@ -739,9 +739,9 @@ function shapeBody(s,live){
         return `<g opacity="${s.opacity}"><circle r="${z}" fill="#0a1028" stroke="${c}" stroke-width="${z*.18}"/><text font-size="${z*.62}" font-family="${FONT}" font-weight="800" fill="${c}" text-anchor="middle" dominant-baseline="central" style="filter:brightness(1.5)">${job}</text></g>`;}
       const fillC=s.role==='support'&&!job?`<path d="M0 ${-z}A${z} ${z} 0 0 0 0 ${z}Z" fill="${ROLE_COL.tank}"/><path d="M0 ${-z}A${z} ${z} 0 0 1 0 ${z}Z" fill="${ROLE_COL.healer}"/><circle r="${z}" fill="none"`:`<circle r="${z}" fill="${c}"`;
       return `<g opacity="${s.opacity}">${fillC} stroke="#fff" stroke-width="${z*.12}"/><text font-size="${z*(String(s.text).length>2?.7:.85)}" font-family="${FONT}" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">${esc(s.text)}</text></g>`;}
-    case'waymark':{const z=Math.max(.1,s.size),c=WM_COL[s.mark]||'#fff',num=/\d/.test(s.mark);
-      const base=num?`<rect x="${-z}" y="${-z}" width="${2*z}" height="${2*z}" rx="${z*.15}"`:`<circle r="${z}"`;
-      return `<g opacity="${s.opacity}">${base} fill="${c}" fill-opacity=".28" stroke="${c}" stroke-width="${z*.14}"/><text font-size="${z*1.15}" font-family="${FONT}" font-weight="700" fill="${c}" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${z*.06}" paint-order="stroke">${esc(s.mark)}</text></g>`;}
+    case'waymark':{const z=Math.max(.1,s.size),c=WM_COL[s.mark]||'#fff',num=/\d/.test(s.mark),sw=z*.14,zi=z-sw/2;
+      const base=num?`<rect x="${-zi}" y="${-zi}" width="${2*zi}" height="${2*zi}" rx="${z*.12}"`:`<circle r="${zi}"`;
+      return `<g opacity="${s.opacity}">${base} fill="${c}" fill-opacity=".28" stroke="${c}" stroke-width="${sw}"/><text font-size="${z*1.15}" font-family="${FONT}" font-weight="700" fill="${c}" text-anchor="middle" dominant-baseline="central" stroke="#000" stroke-width="${z*.06}" paint-order="stroke">${esc(s.mark)}</text></g>`;}
     case'text':{const{lines,w,h,z}=textBox(s);
       const box=s.boxed?`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="${z*.3}" fill="#050a18" fill-opacity=".78" stroke="${s.color}" stroke-opacity=".5" stroke-width="${z*.05}"/>`:(live?`<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" fill="transparent"/>`:'');
       const y0=-(lines.length-1)*z*1.2/2;
@@ -1418,6 +1418,10 @@ function fmtT(ms){ms=Math.max(0,Math.round(ms||0));const m=Math.floor(ms/60000),
 let lastLsel=null;
 // one-time upgrade: rewrite attacks recorded by the older relay with the correct main target / rank / hit list
 let _fixing=false;
+let _wmFixed=false;
+function fixWaymarkSize(){if(_wmFixed||!canWrite||MODE!=='shared')return;_wmFixed=true;
+  const todo=[...allDocs('items').values()].filter(it=>it.type==='waymark'&&it.size===1.5);
+  todo.forEach(it=>{const cur=getDoc('items',it.id);if(cur&&cur.size===1.5)queueWrite('items',it.id,{...clone(cur),size:1});});}
 function fixOldHits(){
   if(_fixing||!canWrite||MODE!=='shared')return;
   const todo=[...allDocs('items').values()].filter(it=>it.auto&&it.ev&&typeof it.ev.raw==='string'&&!Array.isArray(it.ev.hitList)&&!it.ev.hitsFixed);
@@ -1824,7 +1828,7 @@ function setReadOnly(ro){canWrite=!ro;if(ro){setTool('select');}
 function onSnap(col){return snap=>{
   const prev=server[col];
   server[col]=new Map(snap.docs.map(d=>{const v=d.data()||{};let w=_wrap.get(v);if(!w||w.id!==d.id){w={...v,id:d.id};_wrap.set(v,w);}return[d.id,w];}));dataVer++;
-  if(col==='items'&&!snap.metadata.fromCache)setTimeout(fixOldHits,1500);
+  if(col==='items'&&!snap.metadata.fromCache){setTimeout(fixOldHits,1500);setTimeout(fixWaymarkSize,1600);}
   if(col==='items'){const now=Date.now();if(autoInit){for(const[id,it]of server.items)if(it.auto&&!prev.has(id)&&!autoSeen.has(id)){autoSeen.set(id,now);if(it.slide===curSlide){const sl0=curSlideDoc();if(sl0&&sl0.startedAt)pullViewT=Math.max(pullViewT,((it.at||0)-sl0.startedAt)/1000);}}}autoInit=true;}
   if(col==='slides'){if(slidesKnown&&followPulls&&!drag){const nw=[...server.slides.values()].filter(sl=>isPull(sl)&&!slidesKnown.has(sl.id)).sort((a,b)=>(b.pull||0)-(a.pull||0))[0];
       if(nw){slidesKnown=new Set(server.slides.keys());setTimeout(()=>{viewFight=nw.fight||'';goSlide(nw.id);revealCard(nw.id);const f=nw.fight&&getDoc('fights',nw.fight);toast((f?f.name+' — ':'')+nw.title+' started');});}}
