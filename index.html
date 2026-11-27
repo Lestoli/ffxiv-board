@@ -182,7 +182,7 @@ ul.layers .ib.act{color:var(--accent)}
 </head>
 <body>
 <header>
-  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v51</span>
+  <h1>FFXIV <span>Mechanics</span> Board</h1><span id="ver" title="App version — refresh the page if a teammate sees a different number" style="font-size:11px;color:var(--dim);margin-right:4px">v52</span>
   <span class="status" id="status"><span class="dot"></span>Connecting…</span>
   <div class="sp"></div>
   <div id="avatars"></div>
@@ -407,7 +407,8 @@ function hitsOf(ev){if(!ev)return[];if(Array.isArray(ev.hitList)&&ev.hitList.len
 function rankOf(ev){const h=hitsOf(ev);if(h.length)return String(h[0].rank);return ev&&ev.raw?'':String((ev&&ev.dist)||'');}
 const distOf=it=>{const d=it&&it.ev?rankOf(it.ev).trim():'';return d==='1'?'near':d==='8'?'far':'';};
 const distBadge=(it,long)=>{const k=distOf(it);return k==='near'?`<span class="dbadge near" title="Hit the closest player (#1) — likely a distance bait">${long?'#1 CLOSEST':'#1 near'}</span>`:k==='far'?`<span class="dbadge far" title="Hit the farthest player (#8) — likely a distance bait">${long?'#8 FARTHEST':'#8 far'}</span>`:'';};
-function autoShown(it){if(!it.auto||it.pinned)return true;if(rp&&it.slide===curSlide){const d=rp.t-relT(it);return d>=0&&d<showSecs*Math.max(1,rp.speed);}const t=autoSeen.get(it.id);if(t==null)return false;const d=Date.now()-t;return d>=0&&d<showSecs*1000;}
+function autoShown(it){if(rp&&rp.only&&it.auto&&it.slide===curSlide){if(!rp.only.has(it.id))return false;const d=rp.t-relT(it);return d>=0&&d<showSecs*Math.max(1,rp.speed);}
+  if(!it.auto||it.pinned)return true;if(rp&&it.slide===curSlide){const d=rp.t-relT(it);return d>=0&&d<showSecs*Math.max(1,rp.speed);}const t=autoSeen.get(it.id);if(t==null)return false;const d=Date.now()-t;return d>=0&&d<showSecs*1000;}
 let autoWasActive=false;
 setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;for(const t of autoSeen.values()){const d=now-t;if(d<lim){act=true;break;}}
   if(act||autoWasActive){scheduleRender();}autoWasActive=act;},200);
@@ -415,18 +416,25 @@ setInterval(()=>{const now=Date.now(),lim=showSecs*1000+250;let act=false;for(co
 let rp=null,_rpTs=0;
 function relT(it){const sl=getDoc('slides',it.slide);const t0=sl&&sl.startedAt?sl.startedAt:0;return t0?Math.max(0,((it.at||0)-t0)/1000):0;}
 function pullDur(){const its=slideItems(curSlide).filter(i=>i.auto);return its.length?Math.ceil(Math.max(...its.map(relT))+showSecs):10;}
-function rpTick(ts){if(!rp||!rp.playing)return;const dt=Math.min(.25,(ts-_rpTs)/1000);_rpTs=ts;rp.t+=dt*rp.speed;const D=pullDur();if(rp.t>=D){rp.t=D;rp.playing=false;}
+function rpEnd(){return rp&&rp.only?rp.to:pullDur();}
+function rpStartT(){return rp&&rp.only?rp.from:0;}
+function rpTick(ts){if(!rp||!rp.playing)return;const dt=Math.min(.25,(ts-_rpTs)/1000);_rpTs=ts;rp.t+=dt*rp.speed;const D=rpEnd();if(rp.t>=D){if(rp.only&&rp.loop)rp.t=rp.from;else{rp.t=D;rp.playing=false;}}
   pullViewT=rp.t;renderStage();updPullBar();if(rp.playing)requestAnimationFrame(rpTick);}
-function rpPlay(p){if(!isPull(curSlideDoc()))return;if(!rp)rp={t:0,playing:false,speed:+(lsGet('ffxiv-rp-speed')||1)||1};if(p&&rp.t>=pullDur()-.05)rp.t=0;rp.playing=p;if(p){_rpTs=performance.now();requestAnimationFrame(rpTick);}updPullBar();scheduleRender();}
+function rpPlay(p){if(!isPull(curSlideDoc()))return;if(!rp)rp={t:0,playing:false,speed:+(lsGet('ffxiv-rp-speed')||1)||1};if(p&&(rp.t>=rpEnd()-.05||rp.t<rpStartT()))rp.t=rpStartT();rp.playing=p;if(p){_rpTs=performance.now();requestAnimationFrame(rpTick);}updPullBar();scheduleRender();}
 function rpSeek(t){if(!rp)rp={t:0,playing:false,speed:+(lsGet('ffxiv-rp-speed')||1)||1};rp.t=Math.max(0,t);pullViewT=rp.t;updPullBar();renderStage();}
-function rpClose(){rp=null;updPullBar();scheduleRender();}
+function rpClose(){rp=null;updPullBar();scheduleRender();setTimeout(buildInsp);}
+function replaySelected(){const sl=curSlideDoc();if(!isPull(sl))return;const its=selItems().filter(i=>i.auto);if(!its.length){toast('Select some attacks from this pull first');return;}
+  const ts=its.map(relT),from=Math.max(0,Math.min(...ts)-2),to=Math.max(...ts)+showSecs+.5,speed=rp?rp.speed:(+(lsGet('ffxiv-rp-speed')||1)||1);
+  rp={t:from,playing:false,speed,only:new Set(its.map(i=>i.id)),from,to,loop:lsGet('ffxiv-rp-loop')==='1'};selIds=[];renderAll();rpPlay(true);
+  toast(`Replaying ${its.length} attack${its.length===1?'':'s'} (${fmtT(from*1000).replace(/:\d{3}$/,'')}–${fmtT(to*1000).replace(/:\d{3}$/,'')})`);}
 function renderPullBar(){const el=$('pullbar'),sl=curSlideDoc(),on=isPull(sl);el.classList.toggle('on',on);if(!on)return;
   if(el.dataset.slide!==sl.id||!el.firstChild){el.dataset.slide=sl.id;
     el.innerHTML=`<button id="rpStart" title="Back to start">⏮</button><button id="rpPlay" class="pri" title="Play / pause replay (K)">▶</button><input type="range" id="rpScrub" min="0" step="0.05"><span class="tt" id="rpTime">0:00:000</span>
-      <select id="rpSpeed" title="Replay speed"><option value="0.5">½×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="rpClose" title="Exit replay (show live)">✕</button><button id="rpSave" title="Make a normal slide from everything showing right now">📌 Save as slide</button>`;$('rpSave').onclick=pullToSlide;}
+      <select id="rpSpeed" title="Replay speed"><option value="0.5">½×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><span id="rpFocus" style="display:none;align-items:center;gap:6px;padding:2px 8px;border:1px solid var(--accent);border-radius:12px;font-size:12px;white-space:nowrap"><span id="rpFocusN"></span><label class="chk" style="margin:0;font-size:12px" title="Keep repeating this part"><input type="checkbox" id="rpLoop">Loop</label><button id="rpAll" style="padding:1px 7px" title="Back to the whole pull">Whole pull</button></span><button id="rpClose" title="Exit replay (show live)">✕</button><button id="rpSave" title="Make a normal slide from everything showing right now">📌 Save as slide</button>`;$('rpSave').onclick=pullToSlide;}
   updPullBar();}
 function updPullBar(){if(!$('rpScrub'))return;const D=pullDur();const sc=$('rpScrub');sc.max=D;if(document.activeElement!==sc)sc.value=rp?rp.t:0;
-  $('rpTime').textContent=rp?fmtT(rp.t*1000):'live';$('rpPlay').textContent=rp&&rp.playing?'⏸':'▶';$('rpSpeed').value=String(rp?rp.speed:(+(lsGet('ffxiv-rp-speed')||1)||1));$('rpClose').style.visibility=rp?'visible':'hidden';}
+  $('rpTime').textContent=rp?fmtT(rp.t*1000):'live';$('rpPlay').textContent=rp&&rp.playing?'⏸':'▶';$('rpSpeed').value=String(rp?rp.speed:(+(lsGet('ffxiv-rp-speed')||1)||1));$('rpClose').style.visibility=rp?'visible':'hidden';
+  const f=$('rpFocus');if(f){f.style.display=rp&&rp.only?'inline-flex':'none';if(rp&&rp.only){$('rpFocusN').textContent=`Only ${rp.only.size} attack${rp.only.size===1?'':'s'}`;$('rpLoop').checked=!!rp.loop;}}}
 function replayPull(){rpSeek(0);rpPlay(true);}
 function stopReplay(){rpClose();_replay=null;slideItems(curSlide).forEach(i=>{if(i.auto)autoSeen.delete(i.id);});scheduleRender();}
 const TIER=t=>t==='waymark'?1:t==='tether'?1.5:(t==='ink'||t==='arrow'||t==='marker'||t==='text')?2:0;
@@ -932,7 +940,8 @@ function renderSlides(){
       ...(fp.length?fp.map(sl=>({key:sl.id,html:card(sl,'#'+(sl.pull||'?'))})):[{key:'empty',html:'<div class="note">New pulls appear here automatically while the relay is running.</div>'}])];})());
 }
 function renderAll(){renderStage();renderSlides();buildInsp();renderTools();renderAvatars();renderTimeline();renderPullBar();}
-$('pullbar').addEventListener('click',e=>{const id=e.target.id;if(id==='rpPlay')rpPlay(!(rp&&rp.playing));if(id==='rpStart'){if(rp)rp.playing=false;rpSeek(0);}if(id==='rpClose')rpClose();});
+$('pullbar').addEventListener('click',e=>{const id=e.target.id;if(id==='rpPlay')rpPlay(!(rp&&rp.playing));if(id==='rpStart'){if(rp)rp.playing=false;rpSeek(rpStartT());}if(id==='rpClose')rpClose();if(id==='rpAll'&&rp){rp.only=null;updPullBar();scheduleRender();}});
+$('pullbar').addEventListener('change',e=>{if(e.target.id==='rpLoop'&&rp){rp.loop=e.target.checked;lsSet('ffxiv-rp-loop',rp.loop?'1':'0');}});
 $('pullbar').addEventListener('input',e=>{const t=e.target;if(t.id==='rpScrub'){if(rp)rp.playing=false;rpSeek(+t.value);}if(t.id==='rpSpeed'){lsSet('ffxiv-rp-speed',t.value);if(!rp)rp={t:0,playing:false,speed:1};rp.speed=+t.value;updPullBar();}});
 function renderTimeline(){const el=$('timeline'),sl=curSlideDoc();const on=!!(sl&&sl.anim);el.classList.toggle('on',on);if(!on){playing=false;return;}
   if(el.dataset.slide!==sl.id||!el.firstChild){el.dataset.slide=sl.id;
@@ -1340,6 +1349,7 @@ function buildInsp(){
   if(!its.length){ip.innerHTML='';}
   else if(its.length>1){
     ip.innerHTML=closeBtn+`<fieldset style="border:0;padding:0;margin:0"${dis}><h2>${its.length} items selected</h2>
+      ${isPull(curSlideDoc())&&its.some(i=>i.auto)?`<div class="btnrow"><button class="pri" data-replaysel title="Replay just these attacks, from a moment before the first to just after the last">▶ Replay these ${its.filter(i=>i.auto).length} attacks</button></div>`:''}
       <div class="row two"><label>Color</label><input type="color" data-multi="color" value="${its[0].color||'#ffffff'}"></div>
       <div class="swatches">${SWATCHES.map(c=>`<button data-sw="${c}" style="background:${c}"></button>`).join('')}</div>
       ${numRow('opacity','Opacity',.05,0,1,'data-multi')}
@@ -1385,7 +1395,7 @@ function buildInsp(){
         ${aimed?numRow('aimOffset','Aim offset °',1,-180,180)+'<p class="note">Rotation follows the target automatically — move the target and this shape re-aims.</p>':s.target&&s.attach?'<p class="note">This shape follows its target around.</p>':`<p class="note">${ROTATABLE.has(s.type)?'Pick a player and this shape will always aim at them.':'Pick a player and tick “stick” to make this shape follow them.'}</p>`}</div>`:''}
       <div class="sect">${hasColor?colRow('color','Color')+`<div class="swatches">${SWATCHES.map(c=>`<button data-sw="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>`:''}
         ${numRow('opacity','Opacity',.05,0,1)}${aoe||s.type==='tether'?txtRow('label','Label')+numRow('labelSize','Label size',.1,.3,6):''}
-        <div class="chks">${aoe&&!['tower','boss'].includes(s.type)?chk('stroke','Outline'):''}${chk('visible','Visible')}${chk('locked','Locked')}</div>${rotBtns('data-k')}</div>
+        <div class="chks">${aoe&&!['tower','boss'].includes(s.type)?chk('stroke','Outline'):''}${chk('visible','Visible')}${chk('locked','Locked')}</div>${s.auto&&isPull(curSlideDoc())?'<div class="btnrow"><button class="pri" data-replaysel title="Replay just this attack">▶ Replay this attack</button></div>':''}${rotBtns('data-k')}</div>
       <div class="sect btnrow"><button data-act="top" title="Bring to front">⤒ Front</button><button data-act="up">▲</button><button data-act="down">▼</button><button data-act="bottom" title="Send to back">⤓ Back</button>
         <button data-act="dup">Duplicate</button><button data-act="copy">Copy</button><button data-act="del" class="danger">Delete</button><button data-act="deselect">Done</button></div></fieldset>`;
   }
@@ -1475,6 +1485,7 @@ insp.addEventListener('mousedown',e=>{if((e.button===1||e.shiftKey)&&e.target.cl
 insp.addEventListener('auxclick',e=>{if(e.button!==1)return;const li=e.target.closest('[data-lsel]');if(!li||!canWrite)return;e.preventDefault();
   const it=getDoc('items',li.dataset.lsel);if(!it)return;if(it.auto)patchItem(it.id,{pinned:!it.pinned,visible:true});else patchItem(it.id,{visible:it.visible===false});setTimeout(buildInsp);});
 insp.addEventListener('click',e=>{
+  if(e.target.closest('[data-replaysel]')){replaySelected();return;}
   const ra=e.target.closest('[data-rotall]');if(ra){if(!canWrite)return;const deg=+ra.dataset.rotall,its=selItems();if(!its.length)return;beginGesture();
     its.forEach(it=>patchItem(it.id,{rotOff:deg===0?0:normRot((+it.rotOff||0)+deg)}));endGesture();scheduleRender();setTimeout(()=>syncInsp(null,true));return;}
   const sw=e.target.closest('[data-sw]');if(sw){selItems().forEach(it=>patchItem(it.id,{color:sw.dataset.sw}));return;}
